@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS listings (
     status        TEXT,          -- 詳細ページの「現在の運営状況」
     status_state  TEXT,          -- 募集中 / 成約済み / 受付終了
     deal_days     INTEGER,       -- 成約までの日数（成約済みのみ）
+    listed_at     TEXT,          -- 公開日（ラッコ掲載日）
+    updated_at    TEXT,          -- 出品情報の更新日
     price         INTEGER,
     price_str     TEXT,
     ratio_str     TEXT,
@@ -70,6 +72,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     sustainability  INTEGER,
     value           INTEGER,
     growth          INTEGER,
+    capability_fit  INTEGER,
     genre           TEXT,
     verdict         TEXT,
     verdict_reason  TEXT,
@@ -87,7 +90,8 @@ CREATE INDEX IF NOT EXISTS idx_eval_overall   ON evaluations(overall_score);
 _METRIC_COLS = ["profit_recent", "profit_avg", "profit_max", "payback_months_recent",
                 "payback_months_avg", "stability", "profit_per_1k_subs"]
 _LISTING_COLS = ["url", "title", "category", "biz_model", "content_type", "status",
-                 "status_state", "deal_days", "price", "price_str", "ratio_str",
+                 "status_state", "deal_days", "listed_at", "updated_at",
+                 "price", "price_str", "ratio_str",
                  "profit", "profit_str", "revenue", "revenue_str", "followers",
                  "followers_str", "post_count", "start_date", "description"]
 
@@ -100,11 +104,23 @@ def connect() -> sqlite3.Connection:
 
 def init(conn: sqlite3.Connection | None = None) -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    own = conn is None
     conn = conn or connect()
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.commit()
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """既存DBへの後方互換マイグレーション（カラム追加）。"""
+    def cols(tbl):
+        return {r[1] for r in conn.execute(f"PRAGMA table_info({tbl})")}
+    if "capability_fit" not in cols("evaluations"):
+        conn.execute("ALTER TABLE evaluations ADD COLUMN capability_fit INTEGER")
+    lc = cols("listings")
+    for c in ("listed_at", "updated_at"):
+        if c not in lc:
+            conn.execute(f"ALTER TABLE listings ADD COLUMN {c} TEXT")
 
 
 def upsert_listing(conn: sqlite3.Connection, detail: dict, metrics: dict, title: str = "") -> None:
@@ -137,12 +153,13 @@ def save_evaluation(conn: sqlite3.Connection, listing_id: int, ev: dict) -> None
     s = ev.get("scores", {})
     conn.execute(
         """INSERT OR REPLACE INTO evaluations
-           (listing_id, overall_score, replicability, sustainability, value, growth,
+           (listing_id, overall_score, replicability, sustainability, value, growth, capability_fit,
             genre, verdict, verdict_reason, summary, strengths_json, weaknesses_json,
             replication_note, model, evaluated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (int(listing_id), ev.get("overall_score"), s.get("replicability"), s.get("sustainability"),
-         s.get("value"), s.get("growth"), ev.get("genre"), ev.get("verdict"), ev.get("verdict_reason"),
+         s.get("value"), s.get("growth"), ev.get("capability_fit"),
+         ev.get("genre"), ev.get("verdict"), ev.get("verdict_reason"),
          ev.get("summary"), json.dumps(ev.get("strengths", []), ensure_ascii=False),
          json.dumps(ev.get("weaknesses", []), ensure_ascii=False), ev.get("replication_note"),
          ev.get("model"), ev.get("evaluated_at")),
@@ -150,22 +167,54 @@ def save_evaluation(conn: sqlite3.Connection, listing_id: int, ev: dict) -> None
     conn.commit()
 
 
+def _load_list(s: str | None) -> list:
+    """strengths/weaknesses を必ずリストで返す（LLMが文字列で返した不正も吸収）。"""
+    try:
+        v = json.loads(s or "[]")
+    except Exception:
+        return [s] if s else []
+    if isinstance(v, list):
+        return v
+    if isinstance(v, str):
+        t = v.strip()
+        if t.startswith("["):
+            try:
+                p = json.loads(t)
+                if isinstance(p, list):
+                    return p
+            except Exception:
+                pass
+        return [t] if t else []
+    return []
+
+
 def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
     """ダッシュボードJS が期待するネスト構造に整形して返す。"""
     rows = conn.execute("""
         SELECT l.*, e.overall_score, e.replicability, e.sustainability, e.value AS ev_value,
-               e.growth, e.genre, e.verdict, e.verdict_reason, e.summary,
+               e.growth, e.capability_fit, e.genre, e.verdict, e.verdict_reason, e.summary,
                e.strengths_json, e.weaknesses_json, e.replication_note, e.model, e.evaluated_at
         FROM listings l LEFT JOIN evaluations e ON e.listing_id = l.id
         ORDER BY e.overall_score DESC NULLS LAST, l.profit_recent DESC NULLS LAST
     """).fetchall()
+    from datetime import date
+    today = datetime.now(JST).date()
+
+    def _days_since(s):
+        try:
+            y, m, dd = map(int, s.split("-"))
+            return (today - date(y, m, dd)).days
+        except Exception:
+            return None
+
     out = []
     for r in rows:
         d = {
             "id": r["id"], "url": r["url"], "title": r["title"], "category": r["category"],
             "biz_model": r["biz_model"], "price": r["price"], "profit": r["profit"],
             "followers_str": r["followers_str"], "status_state": r["status_state"],
-            "deal_days": r["deal_days"],
+            "deal_days": r["deal_days"], "listed_at": r["listed_at"], "updated_at": r["updated_at"],
+            "days_listed": _days_since(r["listed_at"]),
             "metrics": {c: r[c] for c in _METRIC_COLS},
         }
         if r["overall_score"] is not None:
@@ -173,8 +222,9 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
                 "overall_score": r["overall_score"], "genre": r["genre"],
                 "verdict": r["verdict"], "verdict_reason": r["verdict_reason"], "summary": r["summary"],
                 "replication_note": r["replication_note"],
-                "strengths": json.loads(r["strengths_json"] or "[]"),
-                "weaknesses": json.loads(r["weaknesses_json"] or "[]"),
+                "strengths": _load_list(r["strengths_json"]),
+                "weaknesses": _load_list(r["weaknesses_json"]),
+                "capability_fit": r["capability_fit"],
                 "scores": {"replicability": r["replicability"], "sustainability": r["sustainability"],
                            "value": r["ev_value"], "growth": r["growth"]},
             }

@@ -165,6 +165,13 @@ def _fetch_detail(pid: str, url: str) -> dict | None:
     page_title = _htmllib.unescape(title_m.group(1)).strip() if title_m else ""
     page_title = _re.sub(r'\s*[|｜]\s*サイト売買のラッコM&A\s*$', '', page_title)
 
+    # 公開日（ラッコ掲載日）・更新日 → ISO(YYYY-MM-DD)
+    def _date_after(label: str) -> str:
+        m = _re.search(label + r'.{0,80}?(\d{4})/(\d{1,2})/(\d{1,2})', html, _re.S)
+        return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}" if m else ""
+    listed_at  = _date_after("公開日")
+    updated_at = _date_after("更新日")
+
     # ステータス判別（成約済み / 受付終了 / 募集中）と成約期間
     if SOLD_MARKER in html:
         status_state, dm = "成約済み", _re.search(DEAL_DAYS_RE, html)
@@ -178,6 +185,8 @@ def _fetch_detail(pid: str, url: str) -> dict | None:
         "id":           pid,
         "url":          url,
         "title":        page_title,
+        "listed_at":    listed_at,
+        "updated_at":   updated_at,
         "status_state": status_state,
         "deal_days":    deal_days,
         "category":     category,

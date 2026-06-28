@@ -43,7 +43,7 @@ EVAL_TOOL = {
                 "properties": {
                     "replicability": {
                         "type": "integer", "minimum": 1, "maximum": 5,
-                        "description": "再現性: 属人性の低さ・制作の自動化/外注化のしやすさ・参入容易性。自分で同種チャンネルをゼロから作って再現できるか",
+                        "description": "構造的再現性(ジャンル非依存): 属人性の低さ・制作の自動化/外注/テンプレ化のしやすさ・量産/参入容易性。特定ジャンルを優遇せず運営構造だけで判断",
                     },
                     "sustainability": {
                         "type": "integer", "minimum": 1, "maximum": 5,
@@ -60,6 +60,10 @@ EVAL_TOOL = {
                 },
                 "required": ["replicability", "sustainability", "value", "growth"],
             },
+            "capability_fit": {
+                "type": "integer", "minimum": 1, "maximum": 5,
+                "description": "能力適合: 評価者の『顔なし・AIナレーション動画(+隣接フォーマット)自動生成』パイプラインで再現できるか。5=直接再現可 / 3=隣接や軽い拡張で届く / 1=物販・Webサービス・実写演者必須など生産能力外。ジャンルでなく『自分が作れるか』で判断",
+            },
             "strengths": {"type": "array", "items": {"type": "string"}, "description": "強み（2-4個、具体的に）"},
             "weaknesses": {"type": "array", "items": {"type": "string"}, "description": "弱み・リスク（2-4個、具体的に）"},
             "replication_note": {"type": "string", "description": "自分で再現するならどう作るか／再現の難所（1-3文）"},
@@ -67,26 +71,28 @@ EVAL_TOOL = {
             "verdict_reason": {"type": "string", "description": "判定理由（1-2文）"},
             "summary": {"type": "string", "description": "一言サマリ（40字以内）"},
         },
-        "required": ["genre", "scores", "strengths", "weaknesses",
+        "required": ["genre", "scores", "capability_fit", "strengths", "weaknesses",
                      "replication_note", "verdict", "verdict_reason", "summary"],
     },
 }
 
-SYSTEM = """あなたはYouTubeチャンネルM&Aの目利きアナリストです。
-評価の最重要観点は「再現性」——『この収益モデルを自分でゼロから作って再現できるか』です。
+SYSTEM = """あなたはコンテンツ事業M&Aの目利きアナリストです。評価は独立した2軸で行います。
+ジャンル名（スポーツ/解説/料理/エンタメ等）で先入観を持たず、構造だけを見てください。
 
-高く評価する特徴:
-- 属人性が低い（顔出し・肉声なし、翻訳/まとめ/解説/AI生成で運営できる）
-- 制作を自動化・外注化・テンプレ化しやすい
-- ジャンルへの参入が容易で、収益がロングテール（過去動画が稼ぎ続ける）
+【軸1: 構造的再現性（ジャンル非依存）】収益モデルを自分でゼロから再現できるかを、ジャンルに
+よらず運営構造だけで評価する。
+- 高評価: 属人性が低い（特定個人の人気・演者・キャラに依存しない）／制作を自動化・外注・
+  テンプレ化しやすい／収益がロングテール（過去資産が稼ぎ続ける）／量産・参入が容易
+- 低評価: 個人の才能やファンダムに依存／偶発的バズ依存／権利・許諾・BANリスクが高い
+※ 特定ジャンルを「再現しやすい」と優遇しない。属人性も自動化可能性もジャンルでなく構造で決まる。
 
-低く評価する特徴:
-- 特定個人の人気・演者・キャラに依存する
-- 偶発的バズ依存で再現性がない
-- 切り抜き等で権利/許諾リスクが高い、またはBANリスクがある
+【軸2: 能力適合 capability_fit】評価者は「顔出し・肉声なし／AIナレーション主体の動画を自動生成
+するパイプライン（およびその隣接フォーマット）」を保有する。この案件を**その生産能力で再現
+できるか**を1-5で評価する。構造的に自動化可能でも、自分の生産能力で作れないものは低くする。
+ジャンルでなく「自分が作れるか」で切ること。
 
-与えられた定量メトリクス（回収月数・収益安定度など）を必ず根拠に用い、辛口かつ具体的に
-評価してください。最後に submit_evaluation ツールで結果を提出してください。"""
+与えられた定量メトリクス（回収月数・収益安定度など）を必ず根拠に用い、辛口かつ具体的に評価し、
+submit_evaluation ツールで提出してください。"""
 
 
 def _prompt(detail: dict, met: dict) -> str:
@@ -107,11 +113,13 @@ def _prompt(detail: dict, met: dict) -> str:
 収益安定度（直近÷平均, 1超で平均より好調・1未満で失速）: {met.get('stability')}
 登録者1000人あたり月利益: {met.get('profit_per_1k_subs')} 円
 
-上記を踏まえ、再現性を最重視して評価してください。"""
+上記を踏まえ、構造的再現性（ジャンル非依存）と能力適合の2軸で評価してください。"""
 
 
-def _overall(scores: dict) -> float:
-    return round(sum(scores[k] * w for k, w in EVAL_WEIGHTS.items()), 2)
+def _overall(scores: dict, capability_fit: int) -> float:
+    """構造スコアの重み付け和 × 能力適合ゲート(capability_fit/5)。"""
+    base = sum(scores[k] * w for k, w in EVAL_WEIGHTS.items())
+    return round(base * (capability_fit / 5), 2)
 
 
 def evaluate(client: anthropic.Anthropic, detail: dict):
@@ -126,7 +134,11 @@ def evaluate(client: anthropic.Anthropic, detail: dict):
         messages=[{"role": "user", "content": _prompt(detail, met)}],
     )
     ev = next(b.input for b in resp.content if b.type == "tool_use")
-    ev["overall_score"] = _overall(ev["scores"])
+    # LLMが配列指定に反して文字列で返すことがあるため正規化
+    for k in ("strengths", "weaknesses"):
+        ev[k] = DB._load_list(ev.get(k) if isinstance(ev.get(k), str)
+                              else json.dumps(ev.get(k), ensure_ascii=False))
+    ev["overall_score"] = _overall(ev["scores"], ev["capability_fit"])
     ev["model"] = ANALYZER_MODEL
     ev["evaluated_at"] = datetime.now(JST).isoformat()
     return met, ev, resp.usage
@@ -160,8 +172,8 @@ def main() -> None:
         DB.save_evaluation(conn, lid, ev)
         in_tok += usage.input_tokens
         out_tok += usage.output_tokens
-        print(f"  → 総合 {ev['overall_score']} / 再現性 {ev['scores']['replicability']} "
-              f"/ {ev['verdict']} | {ev['summary']}")
+        print(f"  → 総合 {ev['overall_score']} / 再現{ev['scores']['replicability']} 適合{ev['capability_fit']} "
+              f"/ {ev['verdict']} | [{ev['genre']}] {ev['summary']}")
         n += 1
 
     print(f"\n完了: {n}件を評価")

@@ -68,7 +68,7 @@ HTML = r"""<!DOCTYPE html>
   .score { font-weight:700; }
   .s-hi { color:var(--good); } .s-mid { color:var(--mid); } .s-lo { color:var(--bad); }
   .genre { color:var(--mut); }
-  .detail td { background:#11161e; padding:0; }
+  .detail td { background:#11161e; padding:0; white-space:normal; }
   .detail .inner { padding:14px 18px 18px; display:grid; grid-template-columns:1fr 1fr; gap:18px; }
   .detail h4 { margin:0 0 6px; font-size:12px; color:var(--mut); text-transform:uppercase;
                letter-spacing:.04em; }
@@ -76,8 +76,10 @@ HTML = r"""<!DOCTYPE html>
   .detail .full { grid-column:1 / -1; }
   .detail .note { background:var(--panel); border:1px solid var(--line); border-radius:8px;
                   padding:10px 12px; line-height:1.6; }
-  .bars { display:flex; gap:14px; flex-wrap:wrap; }
-  .bar { font-size:12px; } .bar b { color:var(--fg); }
+  .bars { display:flex; gap:16px; flex-wrap:wrap; align-items:baseline; }
+  .bar { font-size:13px; } .bar b { color:var(--fg); }
+  .bars.scores { gap:22px; padding-bottom:4px; border-bottom:1px solid var(--line); }
+  .scores .bar { font-size:15px; } .scores b { font-size:17px; font-weight:700; }
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
@@ -119,18 +121,18 @@ const COLS = [
   {k:'state',  label:'状態',     get:r=>r.status_state ?? null, statePill:true},
   {k:'verdict',label:'判定',     get:r=>r.evaluation?.verdict ?? null},
   {k:'overall',label:'総合',     get:r=>r.evaluation?.overall_score ?? null, num:true, score:true},
+  {k:'cap',    label:'適合',     get:r=>r.evaluation?.capability_fit ?? null, num:true, s5:true},
   {k:'profit', label:'月利益',   get:r=>r.metrics?.profit_recent ?? r.profit ?? null, num:true, money:true},
   {k:'price',  label:'価格',     get:r=>r.price ?? null, num:true, money:true},
   {k:'payback',label:'回収月',   get:r=>r.metrics?.payback_months_recent ?? null, num:true},
-  {k:'deal',   label:'成約日',   get:r=>r.deal_days ?? null, num:true},
-  {k:'rep',    label:'再現',     get:r=>r.evaluation?.scores?.replicability ?? null, num:true, s5:true},
-  {k:'sus',    label:'持続',     get:r=>r.evaluation?.scores?.sustainability ?? null, num:true, s5:true},
-  {k:'val',    label:'割安',     get:r=>r.evaluation?.scores?.value ?? null, num:true, s5:true},
-  {k:'gro',    label:'成長',     get:r=>r.evaluation?.scores?.growth ?? null, num:true, s5:true},
-  {k:'stab',   label:'安定度',   get:r=>r.metrics?.stability ?? null, num:true},
+  {k:'listed', label:'掲載',     get:r=>r.listed_at ?? null, cls:'date'},
+  {k:'stale',  label:'滞留',     get:r=>r.days_listed ?? null, num:true},
+  {k:'deal',   label:'成約日数', get:r=>r.deal_days ?? null, num:true},
   {k:'genre',  label:'ジャンル', get:r=>r.evaluation?.genre||'', cls:'genre'},
 ];
-let sortKey='overall', sortDir=-1;
+let sortKey='verdict', sortDir=1;   // 既定: 判定(買い→様子見→見送り) → 総合降順
+const VRANK={'買い':0,'様子見':1,'見送り':2};
+function keyVal(c,r){ return c.k==='verdict' ? (VRANK[r.evaluation?.verdict] ?? 9) : c.get(r); }
 
 const yen = n => n==null ? '–' : '¥'+Number(n).toLocaleString();
 function sCls(v,max){ if(v==null) return ''; const r=v/max; return r>=0.7?'s-hi':r>=0.45?'s-mid':'s-lo'; }
@@ -155,7 +157,7 @@ function cell(c,r){
   if(c.score) return `<span class="score ${sCls(v,5)}">${v}</span>`;
   if(c.s5)    return `<span class="${sCls(v,5)}">${v}</span>`;
   if(c.k==='payback') return v+'ヶ月';
-  if(c.k==='deal')    return v+'日';
+  if(c.k==='deal' || c.k==='stale') return v+'日';
   return esc(String(v));
 }
 function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
@@ -167,8 +169,16 @@ function detailRow(r,span){
       <div class="full mut">未評価。<code>python3 analyze.py --id ${r.id}</code> で評価できます。</div>
       </div></td></tr>`;
   }
-  const li=a=>(a||[]).map(x=>`<li>${esc(x)}</li>`).join('');
+  const li=a=>(Array.isArray(a)?a:[]).map(x=>`<li>${esc(x)}</li>`).join('');
   return `<tr class="detail hidden"><td colspan="${span}"><div class="inner">
+    <div class="full bars scores">
+      <span class="bar mut">総合 <b class="score ${sCls(e.overall_score,5)}">${e.overall_score}</b></span>
+      <span class="bar mut">再現 <b class="${sCls(e.scores.replicability,5)}">${e.scores.replicability}</b></span>
+      <span class="bar mut">持続 <b class="${sCls(e.scores.sustainability,5)}">${e.scores.sustainability}</b></span>
+      <span class="bar mut">割安 <b class="${sCls(e.scores.value,5)}">${e.scores.value}</b></span>
+      <span class="bar mut">成長 <b class="${sCls(e.scores.growth,5)}">${e.scores.growth}</b></span>
+      <span class="bar mut">安定度 <b>${m.stability ?? '–'}</b></span>
+    </div>
     <div><h4>強み</h4><ul>${li(e.strengths)}</ul></div>
     <div><h4>弱み・リスク</h4><ul>${li(e.weaknesses)}</ul></div>
     <div class="full"><h4>再現メモ（自分で作るなら）</h4><div class="note">${esc(e.replication_note)}</div></div>
@@ -200,10 +210,15 @@ function render(){
 
   const col=COLS.find(c=>c.k===sortKey);
   rows.sort((a,b)=>{
-    let x=col.get(a), y=col.get(b);
-    x=(x==null)?-Infinity:(typeof x==='number'?x:String(x));
-    y=(y==null)?-Infinity:(typeof y==='number'?y:String(y));
-    if(x<y) return -sortDir; if(x>y) return sortDir; return 0;
+    let x=keyVal(col,a), y=keyVal(col,b);
+    const xn=x==null, yn=y==null;
+    if(xn&&!yn) return 1; if(yn&&!xn) return -1;       // null は常に最下部
+    if(!xn&&!yn){
+      if(typeof x!=='number'){ x=String(x); y=String(y); }
+      if(x<y) return -sortDir; if(x>y) return sortDir;
+    }
+    // 2段目: 総合の降順
+    return (b.evaluation?.overall_score ?? -Infinity)-(a.evaluation?.overall_score ?? -Infinity);
   });
 
   document.getElementById('cnt').textContent=DATA.length;
@@ -218,7 +233,7 @@ function render(){
     return `<tr class="row" onclick="toggle(this)">${tds}</tr>`+detailRow(r,span);
   }).join('');
 }
-function sortBy(k){ if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=-1; } render(); }
+function sortBy(k){ if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=(k==='verdict')?1:-1; } render(); }
 function toggle(tr){ tr.nextElementSibling.classList.toggle('hidden'); }
 render();
 </script>
