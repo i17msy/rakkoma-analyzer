@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     value           INTEGER,
     growth          INTEGER,
     capability_fit  INTEGER,
+    risk_factor     REAL,
     genre           TEXT,
     verdict         TEXT,
     verdict_reason  TEXT,
@@ -127,8 +128,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
     """既存DBへの後方互換マイグレーション（カラム追加）。"""
     def cols(tbl):
         return {r[1] for r in conn.execute(f"PRAGMA table_info({tbl})")}
-    if "capability_fit" not in cols("evaluations"):
+    ec = cols("evaluations")
+    if "capability_fit" not in ec:
         conn.execute("ALTER TABLE evaluations ADD COLUMN capability_fit INTEGER")
+    if "risk_factor" not in ec:
+        conn.execute("ALTER TABLE evaluations ADD COLUMN risk_factor REAL")
     lc = cols("listings")
     for c in ("listed_at", "updated_at", "flags", "profit_series"):
         if c not in lc:
@@ -174,11 +178,11 @@ def save_evaluation(conn: sqlite3.Connection, listing_id: int, ev: dict) -> None
     conn.execute(
         """INSERT OR REPLACE INTO evaluations
            (listing_id, overall_score, replicability, sustainability, value, growth, capability_fit,
-            genre, verdict, verdict_reason, summary, strengths_json, weaknesses_json,
+            risk_factor, genre, verdict, verdict_reason, summary, strengths_json, weaknesses_json,
             replication_note, model, evaluated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (int(listing_id), ev.get("overall_score"), s.get("replicability"), s.get("sustainability"),
-         s.get("value"), s.get("growth"), ev.get("capability_fit"),
+         s.get("value"), s.get("growth"), ev.get("capability_fit"), ev.get("risk_factor"),
          ev.get("genre"), ev.get("verdict"), ev.get("verdict_reason"),
          ev.get("summary"), json.dumps(ev.get("strengths", []), ensure_ascii=False),
          json.dumps(ev.get("weaknesses", []), ensure_ascii=False), ev.get("replication_note"),
@@ -212,7 +216,7 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
     """ダッシュボードJS が期待するネスト構造に整形して返す。"""
     rows = conn.execute("""
         SELECT l.*, e.overall_score, e.replicability, e.sustainability, e.value AS ev_value,
-               e.growth, e.capability_fit, e.genre, e.verdict, e.verdict_reason, e.summary,
+               e.growth, e.capability_fit, e.risk_factor, e.genre, e.verdict, e.verdict_reason, e.summary,
                e.strengths_json, e.weaknesses_json, e.replication_note, e.model, e.evaluated_at
         FROM listings l LEFT JOIN evaluations e ON e.listing_id = l.id
         ORDER BY e.overall_score DESC NULLS LAST, l.profit_recent DESC NULLS LAST
@@ -260,7 +264,7 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
                 "replication_note": r["replication_note"],
                 "strengths": _load_list(r["strengths_json"]),
                 "weaknesses": _load_list(r["weaknesses_json"]),
-                "capability_fit": r["capability_fit"],
+                "capability_fit": r["capability_fit"], "risk_factor": r["risk_factor"],
                 "scores": {"replicability": r["replicability"], "sustainability": r["sustainability"],
                            "value": r["ev_value"], "growth": r["growth"]},
             }

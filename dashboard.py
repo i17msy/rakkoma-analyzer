@@ -93,15 +93,16 @@ HTML = r"""<!DOCTYPE html>
   .detail td { background:#0d121b; padding:0; white-space:normal; }
   .detail .inner { padding:16px 20px 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;
                    font-size:14.5px; border-left:3px solid var(--accent); position:relative; }
-  .closeBtn { position:absolute; top:6px; right:12px; background:transparent; border:none;
-              color:var(--mut); font-size:32px; line-height:1; cursor:pointer; padding:2px 10px; }
+  .closeBtn { position:absolute; top:2px; right:12px; background:transparent; border:none;
+              color:var(--mut); font-size:52px; line-height:1; cursor:pointer; padding:2px 14px; }
   .closeBtn:hover { color:var(--fg); }
-  .detail h4 { margin:0 0 7px; font-size:14px; color:#9fb4cc; text-transform:uppercase;
+  .detail h4 { margin:0 0 7px; font-size:16px; color:#9fb4cc; text-transform:uppercase;
                letter-spacing:.04em; }
   .detail ul { margin:0; padding-left:18px; } .detail li { margin:4px 0; line-height:1.6; }
   .detail .full { grid-column:1 / -1; }
   .detail .note { background:var(--panel); border:1px solid var(--line); border-radius:8px;
                   padding:11px 13px; line-height:1.7; }
+  .detail .note .pill { font-size:13px; padding:2px 9px; }
   .bars { display:flex; gap:16px; flex-wrap:wrap; align-items:baseline; }
   .bar { font-size:13.5px; } .bar b { color:var(--fg); }
   .dtitle { color:var(--accent); font-size:24px; font-weight:600; text-decoration:none; }
@@ -109,6 +110,8 @@ HTML = r"""<!DOCTYPE html>
   .bars.scores { gap:22px; padding-bottom:6px; border-bottom:1px solid var(--line); }
   .scores .bar { font-size:18px; } .scores b { font-size:23px; font-weight:700; }
   .scores b.s-hi { color:var(--good); } .scores b.s-mid { color:var(--mid); } .scores b.s-lo { color:var(--bad); }
+  .bar b.s-lo { color:var(--bad); }
+  .detail h4.hStr { color:var(--good); } .detail h4.hWeak { color:var(--mid); }
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
@@ -148,10 +151,10 @@ const DATA = __DATA__;
 const COLS = [
   {k:'title',  label:'案件',     get:r=>r.title||'', cls:'title'},
   {k:'state',  label:'状態',     get:r=>r.status_state ?? null, statePill:true, align:'center'},
+  {k:'cap',    label:'適合',     get:r=>r.evaluation?.capability_fit ?? null, num:true, s5:true, align:'center'},
+  {k:'overall',label:'総合',     get:r=>r.evaluation?.overall_score ?? null, num:true, score:true, align:'center'},
   {k:'verdict',label:'判定',     get:r=>r.evaluation?.verdict ?? null, align:'center'},
   {k:'flags',  label:'🚩',       get:r=>r.flags||[], cls:'flags', align:'center'},
-  {k:'overall',label:'総合',     get:r=>r.evaluation?.overall_score ?? null, num:true, score:true, align:'center'},
-  {k:'cap',    label:'適合',     get:r=>r.evaluation?.capability_fit ?? null, num:true, s5:true, align:'center'},
   {k:'mom',    label:'勢',       get:r=>r.metrics?.stability ?? null, cls:'mom', align:'center'},
   {k:'profit', label:'平均利益', get:r=>r.metrics?.profit_avg ?? r.profit ?? null, num:true, money:true},
   {k:'price',  label:'価格',     get:r=>r.price ?? null, num:true, money:true},
@@ -161,7 +164,7 @@ const COLS = [
   {k:'stale',  label:'滞留',     get:r=>r.days_listed ?? null, num:true},
   {k:'genre',  label:'ジャンル', get:r=>r.evaluation?.genre||'', cls:'genre'},
 ];
-let sortKey='verdict', sortDir=1;   // 既定: 判定(買い→様子見→見送り) → 総合降順
+let sortKey='cap', sortDir=-1;   // 既定: 適合(降順) → 総合(降順)
 const VRANK={'買い':0,'様子見':1,'見送り':2};
 function keyVal(c,r){ return c.k==='verdict' ? (VRANK[r.evaluation?.verdict] ?? 9) : c.get(r); }
 function acl(c){ return c.align==='center'?'ctr':((c.align==='right'||c.num)?'num':''); }
@@ -255,9 +258,10 @@ function detailRow(r,span){
       <span class="bar mut">割安 <b class="${sCls(e.scores.value,5)}">${e.scores.value}</b></span>
       <span class="bar mut">成長 <b class="${sCls(e.scores.growth,5)}">${e.scores.growth}</b></span>
       <span class="bar mut">勢い <b class="${m.stability==null?'':(m.stability>=1?'s-hi':m.stability>=0.7?'s-mid':'s-lo')}">${m.stability==null?'–':'x'+m.stability}</b></span>
+      <span class="bar mut">リスク係数 <b class="${(e.risk_factor!=null&&e.risk_factor<1)?'s-lo':''}">${e.risk_factor==null?'–':'x'+e.risk_factor}</b></span>
     </div>
-    <div><h4>強み</h4><ul>${li(e.strengths)}</ul></div>
-    <div><h4>弱み・リスク</h4><ul>${li(e.weaknesses)}</ul></div>
+    <div><h4 class="hStr">強み</h4><ul>${li(e.strengths)}</ul></div>
+    <div><h4 class="hWeak">弱み・リスク</h4><ul>${li(e.weaknesses)}</ul></div>
     <div class="full"><h4>再現メモ（自分で作るなら）</h4><div class="note">${esc(e.replication_note)}</div></div>
     <div class="full"><h4>判定理由</h4><div class="note">${vPill(e.verdict)} ${esc(e.verdict_reason)}</div></div>
     <div class="full bars">
@@ -268,8 +272,9 @@ function detailRow(r,span){
     </div>
     <div class="full bars">
       <span class="bar mut">登録者 <b>${esc(r.followers_str||'–')}</b></span>
+      <span class="bar mut">平均利益 <b>${yen(m.profit_avg)}</b></span>
       <span class="bar mut">直近月利益 <b>${yen(m.profit_recent)}</b></span>
-      <span class="bar mut">平均/最高 <b>${yen(m.profit_avg)} / ${yen(m.profit_max)}</b></span>
+      <span class="bar mut">最低/最高 <b class="${m.profit_min===0?'s-lo':''}">${yen(m.profit_min)}</b> / <b>${yen(m.profit_max)}</b></span>
       <span class="bar mut">登録者1k人あたり利益 <b>${yen(m.profit_per_1k_subs)}</b></span>
       <span class="bar mut">収益モデル <b>${esc(r.biz_model||'–')}</b></span>
     </div>

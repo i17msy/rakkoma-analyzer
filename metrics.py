@@ -45,9 +45,13 @@ def _series_shape(series: list[int]) -> dict:
     avg_mon = sum(mon) / mm
     recent_vs_max = round(recent / mx, 2) if mx else None
     cv = round(_st.pstdev(mon) / avg_mon, 2) if (mm >= 2 and avg_mon) else None
-    k = min(3, mm)
-    f3, l3 = sum(mon[:k]) / k, sum(mon[-k:]) / k
-    trend = round((l3 / f3 - 1) * 100) if f3 > 0 else None  # 収益化後 直近3 vs 最初3
+    # トレンド: 収益化期間の前半平均 vs 後半平均（常に重複しない窓。少ない月数でも算出可）
+    h = mm // 2
+    if h >= 1:
+        f, l = sum(mon[:h]) / h, sum(mon[-h:]) / h
+        trend = round((l / f - 1) * 100) if f > 0 else None
+    else:
+        trend = None
     interior_zero = any(v == 0 for v in series[first:])     # 途中ゼロ＝停止痕跡
 
     flags = []
