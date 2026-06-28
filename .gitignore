@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+rakkoma.log
+data/seen_listings.json
