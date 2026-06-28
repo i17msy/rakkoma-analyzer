@@ -36,7 +36,9 @@ EVAL_TOOL = {
         "properties": {
             "genre": {
                 "type": "string",
-                "description": "ジャンル分類（例: まとめ/翻訳/解説/切り抜き/AI生成/海外反応 など。複合可）",
+                "maxLength": 20,
+                "description": "主ジャンルを簡潔に。形式/制作の特徴を最大3語・スラッシュ区切り"
+                               "（例: まとめ/解説/AI生成）。括弧の補足説明は付けず、20字以内に収める。",
             },
             "scores": {
                 "type": "object",

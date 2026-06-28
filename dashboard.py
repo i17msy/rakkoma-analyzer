@@ -8,6 +8,7 @@ LLM評価（再現性重視）+ 定量メトリクスを一覧化。総合スコ
 """
 
 import json
+import re
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -129,6 +130,15 @@ HTML = r"""<!DOCTYPE html>
     <option value="募集中">募集中</option>
     <option value="成約済み">成約済み</option>
     <option value="受付終了">受付終了</option>
+  </select>
+  <select id="capOp" onchange="render()">
+    <option value="">適合: すべて</option>
+    <option value="ge">適合 ≥</option>
+    <option value="eq">適合 =</option>
+    <option value="le">適合 ≤</option>
+  </select>
+  <select id="capVal" onchange="render()">
+    <option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option>
   </select>
   <select id="vf" onchange="render()">
     <option value="">判定: すべて</option>
@@ -283,6 +293,8 @@ function detailRow(r,span){
 
 function render(){
   const q=document.getElementById('q').value.trim().toLowerCase();
+  const capOp=document.getElementById('capOp').value;
+  const capVal=+document.getElementById('capVal').value;
   const vf=document.getElementById('vf').value;
   const sf=document.getElementById('sf').value;
   const evalOnly=document.getElementById('evalOnly').checked;
@@ -292,6 +304,13 @@ function render(){
     if(sf && r.status_state!==sf) return false;
     if(vf==='__none' && r.evaluation) return false;
     if(vf && vf!=='__none' && r.evaluation?.verdict!==vf) return false;
+    if(capOp){
+      const cf=r.evaluation?.capability_fit;
+      if(cf==null) return false;
+      if(capOp==='ge' && !(cf>=capVal)) return false;
+      if(capOp==='eq' && !(cf===capVal)) return false;
+      if(capOp==='le' && !(cf<=capVal)) return false;
+    }
     if(q){ const hay=(String(r.id)+' '+(r.title||'')+' '+(r.evaluation?.genre||'')).toLowerCase();
            if(!hay.includes(q)) return false; }
     return true;
@@ -337,7 +356,10 @@ def main() -> None:
     for r in rows:
         ev = r.get("evaluation")
         if ev and ev.get("genre"):
-            ev["genre"] = abbr_genre(ev["genre"])
+            # 括弧の補足を除去 → 短縮辞書 → 念のため20字で丸め
+            g = re.sub(r"[（(][^）)]*[）)]", "", ev["genre"]).strip(" /　/")
+            g = abbr_genre(g)
+            ev["genre"] = g if len(g) <= 20 else g[:19] + "…"
         # 運営乖離（収益化月数 ≫ 運営月数 = 再販/移管の疑い）をフラグに格上げ
         if (r.get("history_gap") or 0) >= 3 and "運営乖離" not in r.get("flags", []):
             r.setdefault("flags", []).append("運営乖離")
