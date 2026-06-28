@@ -39,3 +39,34 @@ YOUTUBE_TITLE_KEYWORDS = [
 
 # ── 収益モデル: アドセンス系かどうかの確認キーワード ─────────────────────────
 ADSENSE_KEYWORDS = ["アドセンス", "Adsense", "AdSense", "CPM", "CPC", "収益化プログラム"]
+
+# ── アナライザー設定 ──────────────────────────────────────────────────────────
+# LLM評価モデル（評価は推論質とコストのバランスでSonnet。重い判断ならopus-4-8に）
+ANALYZER_MODEL = "claude-sonnet-4-6"
+
+# 評価軸の重み付け（再現性重視）。合計1.0
+#   overall_score = Σ scores[axis] * weight[axis]
+EVAL_WEIGHTS = {
+    "replicability":  0.45,  # 再現性: 自分で作って再現できるか（最重視）
+    "sustainability": 0.25,  # 収益持続性: ロングテール性・依存リスクの低さ
+    "value":          0.15,  # 割安度: 回収月数・価格に対する収益の妥当性
+    "growth":         0.15,  # 成長余地: 投稿頻度改善・未開拓施策などの伸びしろ
+}
+
+# ダッシュボード出力先
+DASHBOARD_FILE = DATA_DIR / "dashboard.html"
+
+# ── 列挙・バックフィル設定 ────────────────────────────────────────────────────
+LIST_URL = f"{BASE_URL}/project/list/"                       # 販売中一覧（ページング）
+SITEMAP_LISTINGS = f"{BASE_URL}/sitemap_listings.xml"        # 全案件URL（lastmod付き）
+RECENT_MONTHS = 6          # サイトマップから拾うクローズ案件の鮮度（直近Nヶ月）
+CRAWL_DELAY_SEC = 3.0      # 詳細ページ巡回時のリクエスト間隔（robotsはCrawl-delay:10を要請）
+ENUM_TARGETS_FILE = DATA_DIR / "enum_targets.json"           # 列挙結果の確定IDリスト
+
+# ── ステータス判別マーカー（詳細ページHTML）──────────────────────────────────
+#   募集中  : 下記いずれのバナーも無い
+#   成約済み: SOLD_MARKER + 成約期間 をパース
+#   受付終了: WITHDRAWN_MARKER（取り下げ・募集終了）
+SOLD_MARKER = "この案件は成約済みです"
+WITHDRAWN_MARKER = "この案件は交渉の受付を終了しています"
+DEAL_DAYS_RE = r"成約期間：\s*(\d+)\s*日"   # 売れるまでの日数（需要シグナル）

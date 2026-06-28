@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 rakkoma.log
 data/seen_listings.json
+data/dashboard.html
+data/enum_targets.json
+data/rakkoma.db

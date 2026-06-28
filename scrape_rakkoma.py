@@ -29,6 +29,7 @@ from config import (
     REPLICABLE_CONTENT_KEYWORDS,
     YOUTUBE_TITLE_KEYWORDS,
     ADSENSE_KEYWORDS,
+    SOLD_MARKER, WITHDRAWN_MARKER, DEAL_DAYS_RE,
 )
 
 LOG_FILE  = RAKKOMA_DIR / "rakkoma.log"
@@ -113,6 +114,7 @@ def _is_video_related_title(title: str) -> bool:
 # ── 詳細ページ取得・パース ─────────────────────────────────────────────────────
 
 import re as _re
+import html as _htmllib
 
 def _fetch_detail(pid: str, url: str) -> dict | None:
     try:
@@ -157,9 +159,27 @@ def _fetch_detail(pid: str, url: str) -> dict | None:
     desc_m = _re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']{0,500})', html)
     description = desc_m.group(1).strip() if desc_m else ""
 
+    # 案件名を og:title / <title> から取得（サイト名サフィックス・HTMLエンティティ除去）
+    title_m = (_re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)', html)
+               or _re.search(r'<title[^>]*>([^<]+)</title>', html))
+    page_title = _htmllib.unescape(title_m.group(1)).strip() if title_m else ""
+    page_title = _re.sub(r'\s*[|｜]\s*サイト売買のラッコM&A\s*$', '', page_title)
+
+    # ステータス判別（成約済み / 受付終了 / 募集中）と成約期間
+    if SOLD_MARKER in html:
+        status_state, dm = "成約済み", _re.search(DEAL_DAYS_RE, html)
+        deal_days = int(dm.group(1)) if dm else None
+    elif WITHDRAWN_MARKER in html:
+        status_state, deal_days = "受付終了", None
+    else:
+        status_state, deal_days = "募集中", None
+
     return {
         "id":           pid,
         "url":          url,
+        "title":        page_title,
+        "status_state": status_state,
+        "deal_days":    deal_days,
         "category":     category,
         "price":        _parse_num(price_str),
         "price_str":    price_str,
