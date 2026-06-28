@@ -9,6 +9,7 @@ raw_json に詳細の生データを保持し、よく検索する列だけ正�
 """
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -49,9 +50,18 @@ CREATE TABLE IF NOT EXISTS listings (
     profit_recent         INTEGER,
     profit_avg            INTEGER,
     profit_max            INTEGER,
+    profit_min            INTEGER,
+    months                INTEGER,
+    monetized_months      INTEGER,
+    leading_zeros         INTEGER,
+    recent_vs_max         REAL,
     payback_months_recent REAL,
     payback_months_avg    REAL,
     stability             REAL,
+    cv                    REAL,
+    trend                 REAL,
+    flags                 TEXT,
+    profit_series         TEXT,
     profit_per_1k_subs    INTEGER,
     -- 管理
     raw_json     TEXT,
@@ -87,8 +97,10 @@ CREATE INDEX IF NOT EXISTS idx_listings_state ON listings(status_state);
 CREATE INDEX IF NOT EXISTS idx_eval_overall   ON evaluations(overall_score);
 """
 
-_METRIC_COLS = ["profit_recent", "profit_avg", "profit_max", "payback_months_recent",
-                "payback_months_avg", "stability", "profit_per_1k_subs"]
+_METRIC_COLS = ["profit_recent", "profit_avg", "profit_max", "profit_min", "months",
+                "monetized_months", "leading_zeros", "recent_vs_max",
+                "payback_months_recent", "payback_months_avg", "stability", "cv", "trend",
+                "profit_per_1k_subs"]
 _LISTING_COLS = ["url", "title", "category", "biz_model", "content_type", "status",
                  "status_state", "deal_days", "listed_at", "updated_at",
                  "price", "price_str", "ratio_str",
@@ -118,9 +130,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "capability_fit" not in cols("evaluations"):
         conn.execute("ALTER TABLE evaluations ADD COLUMN capability_fit INTEGER")
     lc = cols("listings")
-    for c in ("listed_at", "updated_at"):
+    for c in ("listed_at", "updated_at", "flags", "profit_series"):
         if c not in lc:
             conn.execute(f"ALTER TABLE listings ADD COLUMN {c} TEXT")
+    for c in ("profit_min", "months", "monetized_months", "leading_zeros"):
+        if c not in lc:
+            conn.execute(f"ALTER TABLE listings ADD COLUMN {c} INTEGER")
+    for c in ("recent_vs_max", "cv", "trend"):
+        if c not in lc:
+            conn.execute(f"ALTER TABLE listings ADD COLUMN {c} REAL")
 
 
 def upsert_listing(conn: sqlite3.Connection, detail: dict, metrics: dict, title: str = "") -> None:
@@ -135,6 +153,8 @@ def upsert_listing(conn: sqlite3.Connection, detail: dict, metrics: dict, title:
     row = {c: detail.get(c) for c in _LISTING_COLS}
     row.update({c: metrics.get(c) for c in _METRIC_COLS})
     row.update({"id": pid, "title": title, "raw_json": json.dumps(detail, ensure_ascii=False),
+                "flags": json.dumps(metrics.get("flags", []), ensure_ascii=False),
+                "profit_series": json.dumps(detail.get("profit_series", []), ensure_ascii=False),
                 "first_seen": first_seen, "last_seen": now, "fetched_at": detail.get("fetched_at", now)})
 
     cols = list(row.keys())
@@ -207,6 +227,17 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
         except Exception:
             return None
 
+    def _operating_months(s):
+        """運営開始時期 'YYYY年MM月' → 今日までの運営月数。"""
+        if not s:
+            return None
+        m = re.search(r"(\d{4})年(\d{1,2})月", s) or re.search(r"(\d{4})年", s)
+        if not m:
+            return None
+        y = int(m.group(1))
+        mo = int(m.group(2)) if m.lastindex and m.lastindex >= 2 else 6
+        return max(0, (today.year - y) * 12 + (today.month - mo))
+
     out = []
     for r in rows:
         d = {
@@ -215,6 +246,11 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
             "followers_str": r["followers_str"], "status_state": r["status_state"],
             "deal_days": r["deal_days"], "listed_at": r["listed_at"], "updated_at": r["updated_at"],
             "days_listed": _days_since(r["listed_at"]),
+            "operating_months": _operating_months(r["start_date"]),
+            "history_gap": ((r["monetized_months"] - _operating_months(r["start_date"]))
+                            if (r["monetized_months"] is not None
+                                and _operating_months(r["start_date"]) is not None) else None),
+            "flags": json.loads(r["flags"] or "[]"),
             "metrics": {c: r[c] for c in _METRIC_COLS},
         }
         if r["overall_score"] is not None:

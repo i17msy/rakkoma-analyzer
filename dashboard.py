@@ -23,6 +23,23 @@ def load() -> list[dict]:
     return DB.fetch_dashboard_rows(DB.init())
 
 
+# ジャンル表示の短縮辞書（表示専用・長いキーから順に置換）。自由に追加可。
+GENRE_ABBR = [
+    ("LINEリスト誘導型サービス販売", "LINEリスト誘導"),
+    ("キュレーション", "キュレ"),
+    ("スピリチュアル", "スピ"),
+    ("ナレーション", "ナレ"),
+    ("アフィリエイト", "アフィ"),
+    ("人材系サービス", "人材系"),
+]
+
+
+def abbr_genre(s: str) -> str:
+    for a, b in GENRE_ABBR:
+        s = s.replace(a, b)
+    return s
+
+
 HTML = r"""<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -30,11 +47,11 @@ HTML = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ラッコM&A アナライザー</title>
 <style>
-  :root { --bg:#0f1419; --panel:#1a2029; --line:#2b3543; --fg:#e6edf3; --mut:#8b98a9;
+  :root { --bg:#03050b; --panel:#1a2029; --line:#202733; --fg:#e6edf3; --mut:#8b98a9;
           --good:#3fb950; --mid:#d29922; --bad:#f85149; --accent:#58a6ff; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
-         font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; font-size:13px; }
+         font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; font-size:14px; }
   header { padding:16px 22px; border-bottom:1px solid var(--line); display:flex;
            align-items:baseline; gap:14px; flex-wrap:wrap; }
   header h1 { font-size:18px; margin:0; }
@@ -48,12 +65,17 @@ HTML = r"""<!DOCTYPE html>
   th, td { padding:9px 10px; text-align:left; border-bottom:1px solid var(--line);
            white-space:nowrap; }
   th { color:var(--mut); font-weight:600; cursor:pointer; user-select:none; position:sticky;
-       top:0; background:var(--bg); font-size:11.5px; }
+       top:0; background:var(--bg); font-size:12.5px; }
   th:hover { color:var(--fg); }
   th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  th.ctr, td.ctr { text-align:center; }
+  td.flags { font-size:17px; letter-spacing:1px; white-space:nowrap; }
+  td.mom { font-size:19px; font-weight:700; }
   tr.row { cursor:pointer; }
-  tr.row:hover > td { background:#161d27; }
-  td.title { white-space:normal; max-width:380px; }
+  tr.row:hover > td { background:#0a0e15; }
+  tr.row.open > td { background:#13283d; }
+  tr.row.open > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  td.title { max-width:420px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   td.title a { color:var(--accent); text-decoration:none; }
   td.title a:hover { text-decoration:underline; }
   .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px;
@@ -68,18 +90,25 @@ HTML = r"""<!DOCTYPE html>
   .score { font-weight:700; }
   .s-hi { color:var(--good); } .s-mid { color:var(--mid); } .s-lo { color:var(--bad); }
   .genre { color:var(--mut); }
-  .detail td { background:#11161e; padding:0; white-space:normal; }
-  .detail .inner { padding:14px 18px 18px; display:grid; grid-template-columns:1fr 1fr; gap:18px; }
-  .detail h4 { margin:0 0 6px; font-size:12px; color:var(--mut); text-transform:uppercase;
+  .detail td { background:#0d121b; padding:0; white-space:normal; }
+  .detail .inner { padding:16px 20px 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;
+                   font-size:14.5px; border-left:3px solid var(--accent); position:relative; }
+  .closeBtn { position:absolute; top:6px; right:12px; background:transparent; border:none;
+              color:var(--mut); font-size:32px; line-height:1; cursor:pointer; padding:2px 10px; }
+  .closeBtn:hover { color:var(--fg); }
+  .detail h4 { margin:0 0 7px; font-size:14px; color:#9fb4cc; text-transform:uppercase;
                letter-spacing:.04em; }
-  .detail ul { margin:0; padding-left:18px; } .detail li { margin:3px 0; line-height:1.5; }
+  .detail ul { margin:0; padding-left:18px; } .detail li { margin:4px 0; line-height:1.6; }
   .detail .full { grid-column:1 / -1; }
   .detail .note { background:var(--panel); border:1px solid var(--line); border-radius:8px;
-                  padding:10px 12px; line-height:1.6; }
+                  padding:11px 13px; line-height:1.7; }
   .bars { display:flex; gap:16px; flex-wrap:wrap; align-items:baseline; }
-  .bar { font-size:13px; } .bar b { color:var(--fg); }
-  .bars.scores { gap:22px; padding-bottom:4px; border-bottom:1px solid var(--line); }
-  .scores .bar { font-size:15px; } .scores b { font-size:17px; font-weight:700; }
+  .bar { font-size:13.5px; } .bar b { color:var(--fg); }
+  .dtitle { color:var(--accent); font-size:24px; font-weight:600; text-decoration:none; }
+  .dtitle:hover { text-decoration:underline; }
+  .bars.scores { gap:22px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+  .scores .bar { font-size:18px; } .scores b { font-size:23px; font-weight:700; }
+  .scores b.s-hi { color:var(--good); } .scores b.s-mid { color:var(--mid); } .scores b.s-lo { color:var(--bad); }
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
@@ -91,7 +120,7 @@ HTML = r"""<!DOCTYPE html>
   <span class="meta">再現性重視評価 · <span id="cnt"></span>件 · 生成 __GENERATED__</span>
 </header>
 <div class="controls">
-  <input id="q" placeholder="タイトル・ジャンル検索…" oninput="render()">
+  <input id="q" placeholder="ID・タイトル・ジャンル検索…" oninput="render()">
   <select id="sf" onchange="render()">
     <option value="">状態: すべて</option>
     <option value="募集中">募集中</option>
@@ -118,21 +147,24 @@ HTML = r"""<!DOCTYPE html>
 const DATA = __DATA__;
 const COLS = [
   {k:'title',  label:'案件',     get:r=>r.title||'', cls:'title'},
-  {k:'state',  label:'状態',     get:r=>r.status_state ?? null, statePill:true},
-  {k:'verdict',label:'判定',     get:r=>r.evaluation?.verdict ?? null},
-  {k:'overall',label:'総合',     get:r=>r.evaluation?.overall_score ?? null, num:true, score:true},
-  {k:'cap',    label:'適合',     get:r=>r.evaluation?.capability_fit ?? null, num:true, s5:true},
-  {k:'profit', label:'月利益',   get:r=>r.metrics?.profit_recent ?? r.profit ?? null, num:true, money:true},
+  {k:'state',  label:'状態',     get:r=>r.status_state ?? null, statePill:true, align:'center'},
+  {k:'verdict',label:'判定',     get:r=>r.evaluation?.verdict ?? null, align:'center'},
+  {k:'flags',  label:'🚩',       get:r=>r.flags||[], cls:'flags', align:'center'},
+  {k:'overall',label:'総合',     get:r=>r.evaluation?.overall_score ?? null, num:true, score:true, align:'center'},
+  {k:'cap',    label:'適合',     get:r=>r.evaluation?.capability_fit ?? null, num:true, s5:true, align:'center'},
+  {k:'mom',    label:'勢',       get:r=>r.metrics?.stability ?? null, cls:'mom', align:'center'},
+  {k:'profit', label:'平均利益', get:r=>r.metrics?.profit_avg ?? r.profit ?? null, num:true, money:true},
   {k:'price',  label:'価格',     get:r=>r.price ?? null, num:true, money:true},
   {k:'payback',label:'回収月',   get:r=>r.metrics?.payback_months_recent ?? null, num:true},
-  {k:'listed', label:'掲載',     get:r=>r.listed_at ?? null, cls:'date'},
+  {k:'operating',label:'運営',   get:r=>r.operating_months ?? null, num:true},
+  {k:'listed', label:'掲載',     get:r=>r.listed_at ?? null, cls:'date', align:'right'},
   {k:'stale',  label:'滞留',     get:r=>r.days_listed ?? null, num:true},
-  {k:'deal',   label:'成約日数', get:r=>r.deal_days ?? null, num:true},
   {k:'genre',  label:'ジャンル', get:r=>r.evaluation?.genre||'', cls:'genre'},
 ];
 let sortKey='verdict', sortDir=1;   // 既定: 判定(買い→様子見→見送り) → 総合降順
 const VRANK={'買い':0,'様子見':1,'見送り':2};
 function keyVal(c,r){ return c.k==='verdict' ? (VRANK[r.evaluation?.verdict] ?? 9) : c.get(r); }
+function acl(c){ return c.align==='center'?'ctr':((c.align==='right'||c.num)?'num':''); }
 
 const yen = n => n==null ? '–' : '¥'+Number(n).toLocaleString();
 function sCls(v,max){ if(v==null) return ''; const r=v/max; return r>=0.7?'s-hi':r>=0.45?'s-mid':'s-lo'; }
@@ -144,6 +176,34 @@ function stPill(v){
   const m={'募集中':'st-open','成約済み':'st-sold','受付終了':'st-with'};
   return v ? `<span class="pill ${m[v]||'v-none'}">${v}</span>` : '<span class="mut">–</span>';
 }
+function flagIcon(f){
+  if(f.startsWith('立上げ初期')) return '🌱';
+  if(f.startsWith('急成長'))     return '🚀';
+  if(f.startsWith('ピーク売り')) return '🔝';
+  if(f.startsWith('高変動'))     return '⚡';
+  if(f.startsWith('停止復活'))   return '⛔';
+  if(f.startsWith('下降'))       return '📉';
+  if(f.startsWith('運営乖離'))   return '⚠️';
+  if(f.startsWith('実績安定'))   return '✅';
+  if(f.startsWith('収益ゼロ'))   return '🚫';
+  return '🏷';
+}
+const FLAG_PRIORITY=['運営乖離','停止復活','急成長','ピーク売り','立上げ初期','高変動','下降','実績安定'];
+function flagRank(f){ for(let i=0;i<FLAG_PRIORITY.length;i++) if(f.startsWith(FLAG_PRIORITY[i])) return i; return 99; }
+function flagCell(fl){
+  if(!fl || !fl.length) return '<span class="mut">–</span>';
+  const s=[...fl].sort((a,b)=>flagRank(a)-flagRank(b));
+  return `<span title="${esc(s.join(' / '))}">${s.map(flagIcon).join('')}</span>`;
+}
+// 履歴インサイト: 運営/収益化/立上げ/乖離 を1つのライフサイクル判定に合成
+function lifecycle(op, mm, gap){
+  if(gap!=null && gap>=3)            return {ic:'⚠️', label:'移管疑い', cls:'s-lo'};
+  if(op==null || mm==null)           return {ic:'',   label:'不明',     cls:'mut'};
+  if(op<=6)                          return {ic:'🌱', label:'新規',     cls:'s-mid'};
+  if(op<=18 && mm<12)                return {ic:'📈', label:'成長期',   cls:''};
+  if(mm>=12 && op>=24)               return {ic:'🏛', label:'成熟',     cls:'s-hi'};
+  return {ic:'✓', label:'確立', cls:'s-hi'};
+}
 function cell(c,r){
   let v=c.get(r);
   if(c.cls==='title'){
@@ -151,12 +211,17 @@ function cell(c,r){
     return `<a href="${u}" target="_blank" rel="noopener">${esc(v)}</a>`;
   }
   if(c.statePill) return stPill(v);
+  if(c.k==='flags') return flagCell(v);
   if(c.k==='verdict') return vPill(v);
   if(v==null) return '<span class="mut">–</span>';
   if(c.money) return yen(v);
   if(c.score) return `<span class="score ${sCls(v,5)}">${v}</span>`;
   if(c.s5)    return `<span class="${sCls(v,5)}">${v}</span>`;
   if(c.k==='payback') return v+'ヶ月';
+  if(c.k==='mom'){ const a = v>=1.15?['↗','s-hi'] : v<0.85?['↘','s-lo'] : ['→','mut'];
+                   return `<span class="${a[1]}" title="勢い x${v}（直近÷平均）">${a[0]}</span>`; }
+  if(c.k==='operating') return (v/12).toFixed(1)+'年';
+  if(c.k==='gap') return v>=3 ? `<span class="s-lo">+${v}</span>` : '<span class="mut">–</span>';
   if(c.k==='deal' || c.k==='stale') return v+'日';
   return esc(String(v));
 }
@@ -166,26 +231,45 @@ function detailRow(r,span){
   const e=r.evaluation, m=r.metrics||{};
   if(!e){
     return `<tr class="detail hidden"><td colspan="${span}"><div class="inner">
+      <button class="closeBtn" onclick="closeDetail(event,this)" title="閉じる">×</button>
       <div class="full mut">未評価。<code>python3 analyze.py --id ${r.id}</code> で評価できます。</div>
       </div></td></tr>`;
   }
   const li=a=>(Array.isArray(a)?a:[]).map(x=>`<li>${esc(x)}</li>`).join('');
+  // 収益化表示と"真の立ち上げ期間"(運営−収益化, 窓が未飽和=収益化<12 のときのみ算出可能)
+  const _mm=m.monetized_months, _op=r.operating_months;
+  const monStr = _mm==null ? '–' : (_mm>=12 ? '12ヶ月+' : _mm+'ヶ月');
+  const ramp = (_mm!=null && _mm<12 && _op!=null) ? Math.max(0, _op-_mm) : null;
+  const lc = lifecycle(_op, _mm, r.history_gap);
+  const opStr = _op==null ? '–' : (_op/12).toFixed(1)+'年';
+  const histSub = `運営${opStr} / 収益化${monStr}${ramp?` / 立上げ${ramp}ヶ月`:''}`;
   return `<tr class="detail hidden"><td colspan="${span}"><div class="inner">
+    <button class="closeBtn" onclick="closeDetail(event,this)" title="閉じる">×</button>
+    <div class="full"><a href="${r.url||'#'}" target="_blank" rel="noopener" class="dtitle">${esc(r.title||'')}</a></div>
     <div class="full bars scores">
+      <span class="bar mut">ID <b>${r.id}</b></span>
+      <span class="bar">${flagCell(r.flags)}</span>
       <span class="bar mut">総合 <b class="score ${sCls(e.overall_score,5)}">${e.overall_score}</b></span>
       <span class="bar mut">再現 <b class="${sCls(e.scores.replicability,5)}">${e.scores.replicability}</b></span>
       <span class="bar mut">持続 <b class="${sCls(e.scores.sustainability,5)}">${e.scores.sustainability}</b></span>
       <span class="bar mut">割安 <b class="${sCls(e.scores.value,5)}">${e.scores.value}</b></span>
       <span class="bar mut">成長 <b class="${sCls(e.scores.growth,5)}">${e.scores.growth}</b></span>
-      <span class="bar mut">安定度 <b>${m.stability ?? '–'}</b></span>
+      <span class="bar mut">勢い <b class="${m.stability==null?'':(m.stability>=1?'s-hi':m.stability>=0.7?'s-mid':'s-lo')}">${m.stability==null?'–':'x'+m.stability}</b></span>
     </div>
     <div><h4>強み</h4><ul>${li(e.strengths)}</ul></div>
     <div><h4>弱み・リスク</h4><ul>${li(e.weaknesses)}</ul></div>
     <div class="full"><h4>再現メモ（自分で作るなら）</h4><div class="note">${esc(e.replication_note)}</div></div>
     <div class="full"><h4>判定理由</h4><div class="note">${vPill(e.verdict)} ${esc(e.verdict_reason)}</div></div>
     <div class="full bars">
+      <span class="bar mut">履歴 <b class="${lc.cls}" style="font-size:15px;margin:0 12px">${lc.ic} ${lc.label}</b> <span class="mut" style="margin-left:6px">${histSub}</span></span>
+      <span class="bar mut">CV(変動) <b>${m.cv ?? '–'}</b></span>
+      <span class="bar mut">トレンド <b>${m.trend==null?'–':m.trend+'%'}</b></span>
+      <span class="bar mut">直近/最高 <b>${m.recent_vs_max ?? '–'}</b></span>
+    </div>
+    <div class="full bars">
       <span class="bar mut">登録者 <b>${esc(r.followers_str||'–')}</b></span>
-      <span class="bar mut">平均/最高利益 <b>${yen(m.profit_avg)} / ${yen(m.profit_max)}</b></span>
+      <span class="bar mut">直近月利益 <b>${yen(m.profit_recent)}</b></span>
+      <span class="bar mut">平均/最高 <b>${yen(m.profit_avg)} / ${yen(m.profit_max)}</b></span>
       <span class="bar mut">登録者1k人あたり利益 <b>${yen(m.profit_per_1k_subs)}</b></span>
       <span class="bar mut">収益モデル <b>${esc(r.biz_model||'–')}</b></span>
     </div>
@@ -203,7 +287,7 @@ function render(){
     if(sf && r.status_state!==sf) return false;
     if(vf==='__none' && r.evaluation) return false;
     if(vf && vf!=='__none' && r.evaluation?.verdict!==vf) return false;
-    if(q){ const hay=((r.title||'')+' '+(r.evaluation?.genre||'')).toLowerCase();
+    if(q){ const hay=(String(r.id)+' '+(r.title||'')+' '+(r.evaluation?.genre||'')).toLowerCase();
            if(!hay.includes(q)) return false; }
     return true;
   });
@@ -224,17 +308,18 @@ function render(){
   document.getElementById('cnt').textContent=DATA.length;
   document.getElementById('head').innerHTML=COLS.map(c=>{
     const ar=sortKey===c.k?(sortDir<0?' ▾':' ▴'):'';
-    return `<th class="${c.num?'num':''}" onclick="sortBy('${c.k}')">${c.label}${ar}</th>`;
+    return `<th class="${acl(c)}" onclick="sortBy('${c.k}')">${c.label}${ar}</th>`;
   }).join('');
 
   const span=COLS.length;
   document.getElementById('body').innerHTML=rows.map((r,i)=>{
-    const tds=COLS.map(c=>`<td class="${c.num?'num ':''}${c.cls||''}">${cell(c,r)}</td>`).join('');
+    const tds=COLS.map(c=>`<td class="${acl(c)} ${c.cls||''}">${cell(c,r)}</td>`).join('');
     return `<tr class="row" onclick="toggle(this)">${tds}</tr>`+detailRow(r,span);
   }).join('');
 }
 function sortBy(k){ if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=(k==='verdict')?1:-1; } render(); }
-function toggle(tr){ tr.nextElementSibling.classList.toggle('hidden'); }
+function toggle(tr){ const d=tr.nextElementSibling; const opening=d.classList.contains('hidden'); d.classList.toggle('hidden'); tr.classList.toggle('open', opening); }
+function closeDetail(ev,btn){ ev.stopPropagation(); const d=btn.closest('tr.detail'); d.classList.add('hidden'); if(d.previousElementSibling) d.previousElementSibling.classList.remove('open'); }
 render();
 </script>
 </body>
@@ -244,6 +329,13 @@ render();
 
 def main() -> None:
     rows = load()
+    for r in rows:
+        ev = r.get("evaluation")
+        if ev and ev.get("genre"):
+            ev["genre"] = abbr_genre(ev["genre"])
+        # 運営乖離（収益化月数 ≫ 運営月数 = 再販/移管の疑い）をフラグに格上げ
+        if (r.get("history_gap") or 0) >= 3 and "運営乖離" not in r.get("flags", []):
+            r.setdefault("flags", []).append("運営乖離")
     data = json.dumps(rows, ensure_ascii=False).replace("</", "<\\/")
     generated = datetime.now(JST).strftime("%Y-%m-%d %H:%M JST")
     html = HTML.replace("__DATA__", data).replace("__GENERATED__", generated)

@@ -181,10 +181,18 @@ def _fetch_detail(pid: str, url: str) -> dict | None:
     else:
         status_state, deal_days = "募集中", None
 
+    # 月次収益系列（グラフ部品 :data-list の配列。3点要約より信頼できる生データ）
+    series_m = _re.search(r'<list-content-area-chart[^>]*:data-list="(\[[\d,\.\s]+\])"', html)
+    try:
+        profit_series = json.loads(_htmllib.unescape(series_m.group(1))) if series_m else []
+    except Exception:
+        profit_series = []
+
     return {
         "id":           pid,
         "url":          url,
         "title":        page_title,
+        "profit_series": profit_series,
         "listed_at":    listed_at,
         "updated_at":   updated_at,
         "status_state": status_state,
