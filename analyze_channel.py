@@ -205,7 +205,18 @@ def _sonnet_insight(listing_id, ykey, cid, vids, win, cliff):
             tool_choice={"type": "tool", "name": "submit_insight"},
             messages=[{"role": "user", "content":
                 f"【ラッコ出品(申告=事実)】\n{rakkoma}\n\n【YouTube実データ(特定済み=事実)】\n{yt}"}])
-        return next(b.input for b in r.content if b.type == "tool_use")
+        ins = next(b.input for b in r.content if b.type == "tool_use")
+        # 防御: sections要素が文字列で返ることがある → 必ず {title,points} に正規化
+        secs = []
+        for s in ins.get("sections", []):
+            if isinstance(s, dict):
+                pts = s.get("points")
+                secs.append({"title": s.get("title", ""),
+                             "points": pts if isinstance(pts, list) else ([str(pts)] if pts else [])})
+            else:
+                secs.append({"title": "", "points": [str(s)]})
+        ins["sections"] = secs
+        return ins
     except Exception as e:
         print(f"[warn] Sonnetインサイト生成失敗: {e}", file=sys.stderr)
         return None

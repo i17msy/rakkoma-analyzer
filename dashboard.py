@@ -327,8 +327,11 @@ function reportBlock(b){
   if(!ins){  // 掘り下げ未実施＝勝ち筋eraのみ（折りたたまずそのまま）
     return `<div class="report"><div class="rbody">${era}<span class="mut">（未掘り下げ — match.py --benchmark で再解釈レポート生成）</span></div></div>`;
   }
-  const secs=(ins.sections||[]).map(s=>
-    `<div class="insec"><div class="institle">${esc(s.title)}</div><ul>${(s.points||[]).map(p=>`<li>${esc(p)}</li>`).join('')}</ul></div>`).join('');
+  const secs=(ins.sections||[]).map(s=>{
+    const title=(s&&s.title)||'';
+    const pts=(s&&Array.isArray(s.points))?s.points:(typeof s==='string'?[s]:[]);
+    return `<div class="insec">${title?`<div class="institle">${esc(title)}</div>`:''}<ul>${pts.map(p=>`<li>${esc(p)}</li>`).join('')}</ul></div>`;
+  }).join('');
   return `<details class="report"><summary>📋 詳細レポート — ${esc(ins.headline||'')}</summary>`
     +`<div class="rbody">${era}<div class="insight">${secs}`
     +(ins.verdict?`<div class="inverdict"><b>総評</b> ${esc(ins.verdict)}</div>`:'')
