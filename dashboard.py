@@ -142,13 +142,13 @@ HTML = r"""<!DOCTYPE html>
   .detail h4.hStr { color:var(--good); } .detail h4.hWeak { color:var(--mid); }
   .ytsec { background:#0a1119; border:1px solid #25405a; border-left:3px solid #c4302b;
            border-radius:8px; padding:11px 14px 13px; margin-top:6px; }
-  .ytsec h4 { color:#ff7a6b; margin:0 0 8px; }
-  .ytc { padding:7px 2px; border-top:1px solid #1b2937; line-height:1.6; }
+  .ytsec h4 { color:#ff7a6b; margin:0 0 8px; font-size:17px; }
+  .ytc { padding:8px 2px; border-top:1px solid #1b2937; line-height:1.65; font-size:15px; }
   .ytc:first-of-type { border-top:none; }
-  .ytc > b { display:inline-block; min-width:44px; }
+  .ytc > b { display:inline-block; min-width:46px; }
   .ytc a { color:#6db3f2; margin:0 8px; text-decoration:none; } .ytc a:hover { text-decoration:underline; }
-  .ytb { margin:5px 0 2px 52px; font-size:13px; color:#a9c2dc;
-         background:#0e1a26; border-radius:6px; padding:6px 9px; }
+  .ytb { margin:5px 0 2px 54px; font-size:14px; color:#a9c2dc;
+         background:#0e1a26; border-radius:6px; padding:7px 10px; }
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
