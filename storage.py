@@ -254,6 +254,7 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
     for r in rows:
         d = {
             "id": r["id"], "url": r["url"], "title": r["title"], "category": r["category"],
+            "asset_type": r["asset_type"],
             "biz_model": r["biz_model"], "price": r["price"], "profit": r["profit"],
             "followers_str": r["followers_str"], "status_state": r["status_state"],
             "deal_days": r["deal_days"], "listed_at": r["listed_at"], "updated_at": r["updated_at"],

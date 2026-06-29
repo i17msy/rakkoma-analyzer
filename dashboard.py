@@ -161,7 +161,7 @@ HTML = r"""<!DOCTYPE html>
   .ytc:first-of-type { border-top:none; }
   .ytcline { font-size:19px; }
   .ytcline > b { display:inline-block; min-width:56px; font-size:23px; font-weight:700; }
-  .ytage { font-size:13px; }
+  .ytage { font-size:17px; }
   .ytcline a { color:#6db3f2; margin:0 9px; text-decoration:none; } .ytcline a:hover { text-decoration:underline; }
   .ytstrip { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 2px; }
   .ytth { height:80px; width:auto; border-radius:4px; border:1px solid #1c2a3a; display:block; }
@@ -192,6 +192,10 @@ HTML = r"""<!DOCTYPE html>
 </header>
 <div class="controls">
   <input id="q" placeholder="ID・タイトル・ジャンル検索…" oninput="render()">
+  <select id="atf" onchange="render()">
+    <option value="__yt" selected>📺 YouTube案件のみ</option>
+    <option value="">種別: すべて</option>
+  </select>
   <select id="sf" onchange="render()">
     <option value="">状態: すべて</option>
     <option value="募集中">募集中</option>
@@ -434,10 +438,14 @@ function render(){
   const vf=document.getElementById('vf').value;
   const ff=document.getElementById('ff').value;
   const sf=document.getElementById('sf').value;
+  const atf=document.getElementById('atf').value;
   const evalOnly=document.getElementById('evalOnly').checked;
+  // asset_type が一件も埋まっていない間(バックフィル中)は種別フィルタを無効化して空表示を防ぐ
+  const hasAT=DATA.some(r=>r.asset_type);
 
   let rows=DATA.filter(r=>{
     if(evalOnly && !r.evaluation) return false;
+    if(atf==='__yt' && hasAT && !(r.asset_type||'').includes('YouTube')) return false;
     if(sf){
       if(sf==='__closed'){ if(r.status_state!=='成約済み' && r.status_state!=='受付終了') return false; }
       else if(r.status_state!==sf) return false;
