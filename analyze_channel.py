@@ -137,9 +137,8 @@ def _gemini_formula(gkey: str, vid: str, secs: int = 240) -> dict:
 _INSIGHT_SYSTEM = """あなたはYouTubeチャンネルM&Aのデューデリ専門家。ラッコ出品(売り手申告)と特定済みのYouTube実データを分析する。
 【最重要の前提】
 - ラッコ申告(収益/登録者/投稿等)も YouTube実データも、すべて等しく"ファクト"として扱う。
-- **申告が虚偽・誇張だ という推論は禁止**。一見の矛盾は「両方が事実として両立する自然なメカニズム」で説明せよ。
-  典型: 直近の新規動画の再生が低くても収益が維持されているなら、それは"旧運営者が作った動画資産のロングテール再生が収益を支えている"構造（嘘ではない）。
-  開始時期の申告と実開設日のズレも、出品者の運用開始日と実開設日の差として自然に説明する（隠蔽と決めつけない）。
+- 申告が虚偽・誇張だ という推論は禁止。一見の矛盾は、両方が事実として両立する自然なメカニズムで説明せよ。
+  どんな構造が妥当かは"この案件のデータ"から自分で導くこと。特定の型・言い回し（例の語）に機械的に当てはめない。
 - すべてを事実とした上でのみ導ける、買い手に有益な推論だけを出す。各pointは1〜2文で簡潔に。"""
 
 _INSIGHT_TOOL = {
@@ -206,9 +205,14 @@ def _sonnet_insight(listing_id, ykey, cid, vids, win, cliff):
             messages=[{"role": "user", "content":
                 f"【ラッコ出品(申告=事実)】\n{rakkoma}\n\n【YouTube実データ(特定済み=事実)】\n{yt}"}])
         ins = next(b.input for b in r.content if b.type == "tool_use")
-        # 防御: sections要素が文字列で返ることがある → 必ず {title,points} に正規化
+        # 防御: sections が文字列/非リストで返ることがある → 必ず [{title,points}] に正規化
+        secs_raw = ins.get("sections")
+        if isinstance(secs_raw, str):
+            secs_raw = [secs_raw]
+        elif not isinstance(secs_raw, list):
+            secs_raw = []
         secs = []
-        for s in ins.get("sections", []):
+        for s in secs_raw:
             if isinstance(s, dict):
                 pts = s.get("points")
                 secs.append({"title": s.get("title", ""),
