@@ -240,7 +240,7 @@ HTML = r"""<!DOCTYPE html>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
   <button id="toggleAll" onclick="toggleAllRows()">▼ 全展開</button>
   <span class="sp"></span>
-  <span class="meta mut">行クリックで詳細展開</span>
+  <span class="meta mut" id="fcnt"></span>
 </div>
 <table>
   <thead><tr id="head"></tr></thead>
@@ -490,6 +490,7 @@ function render(){
   });
 
   document.getElementById('cnt').textContent=DATA.length;
+  document.getElementById('fcnt').textContent=`表示 ${rows.length.toLocaleString()} 件`;
   document.getElementById('head').innerHTML=COLS.map(c=>{
     const ar=sortKey===c.k?(sortDir<0?' ▾':' ▴'):'';
     return `<th class="${acl(c)}" onclick="sortBy('${c.k}')">${c.label}${ar}</th>`;
