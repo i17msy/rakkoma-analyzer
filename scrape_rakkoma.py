@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import socket
+import subprocess
 import sys
 import time as _time
 import xml.etree.ElementTree as ET
@@ -340,9 +341,12 @@ def check_once(dry_run: bool = False) -> int:
             notified += 1
 
     # 新着があればダッシュボードを再生成（ライブ更新）
+    # サブプロセスで実行 → 常駐デーモンの import 済み(古い)モジュールではなく
+    # ディスク上の最新 dashboard.py を毎回使う（編集が再起動なしで反映される）
     if added:
         try:
-            dashboard.main()
+            subprocess.run([sys.executable, str(RAKKOMA_DIR / "dashboard.py")],
+                           check=True, cwd=str(RAKKOMA_DIR))
         except Exception as e:
             log.error(f"ダッシュボード再生成失敗: {e}")
     return notified
