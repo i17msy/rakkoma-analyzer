@@ -186,6 +186,8 @@ HTML = r"""<!DOCTYPE html>
   </select>
   <select id="ff" onchange="render()">
     <option value="">フラグ: すべて</option>
+    <option value="__ytdone">🎥 YT検索済み</option>
+    <option value="__ytnone">— YT未検索</option>
     <option value="__clean">✨クリーン(系列✅)</option>
     <option value="__none">フラグなし(系列✖)</option>
     <option value="__any">フラグあり</option>
@@ -199,8 +201,6 @@ HTML = r"""<!DOCTYPE html>
     <option value="運営乖離">⚠️ 運営乖離</option>
     <option value="収益不明">❓ 収益不明(系列✖)</option>
     <option value="実績安定">✅ 実績安定</option>
-    <option value="__ytdone">🎥 YT検索済み</option>
-    <option value="__ytnone">— YT未検索</option>
   </select>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
   <span class="sp"></span>
