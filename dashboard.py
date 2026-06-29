@@ -319,10 +319,7 @@ function cell(c,r){
     return `<a href="${u}" target="_blank" rel="noopener">${esc(v)}</a>`;
   }
   if(c.statePill) return stPill(v);
-  if(c.k==='flags'){
-    const m=(r.candidates&&r.candidates.length)?` <span class="ytdone" title="YouTube候補出し済み（${r.candidates.length}件）">🎥</span>`:'';
-    return flagCell(v)+m;
-  }
+  if(c.k==='flags') return flagCell(v);  // 🎥は廃止(YT列の一致率と完全重複のため)
   if(c.k==='ytmatch') return v==null?'<span class="mut">–</span>':`<span class="${ytConf(v)}">${Math.round(v*100)}%</span>`;
   if(c.k==='verdict') return vPill(v);
   if(v==null) return '<span class="mut">–</span>';
