@@ -195,6 +195,8 @@ HTML = r"""<!DOCTYPE html>
     <option value="運営乖離">⚠️ 運営乖離</option>
     <option value="収益不明">❓ 収益不明(系列なし)</option>
     <option value="実績安定">✅ 実績安定</option>
+    <option value="__ytdone">🎥 YouTube候補 出し済み</option>
+    <option value="__ytnone">— YouTube候補 未出し</option>
   </select>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
   <span class="sp"></span>
@@ -276,7 +278,8 @@ function cell(c,r){
     return `<a href="${u}" target="_blank" rel="noopener">${esc(v)}</a>`;
   }
   if(c.statePill) return stPill(v);
-  if(c.k==='flags') return flagCell(v);
+  if(c.k==='flags') return flagCell(v) + ((r.candidates&&r.candidates.length)
+      ? ` <span class="ytdone" title="YouTube候補出し済み（${r.candidates.length}件）">🎥</span>` : '');
   if(c.k==='verdict') return vPill(v);
   if(v==null) return '<span class="mut">–</span>';
   if(c.money) return yen(v);
@@ -388,10 +391,13 @@ function render(){
     if(vf && vf!=='__none' && r.evaluation?.verdict!==vf) return false;
     if(ff){
       const fl=r.flags||[];
-      if(ff==='__none' && (fl.length || r.metrics?.monetized_months!=null)) return false;
-      if(ff==='__clean' && (fl.length || r.metrics?.monetized_months==null)) return false;
-      if(ff==='__any' && !fl.length) return false;
-      if(ff!=='__none' && ff!=='__any' && ff!=='__clean' && !fl.some(f=>f.startsWith(ff))) return false;
+      const ytdone=!!(r.candidates&&r.candidates.length);
+      if(ff==='__ytdone' && !ytdone) return false;
+      else if(ff==='__ytnone' && ytdone) return false;
+      else if(ff==='__none' && (fl.length || r.metrics?.monetized_months!=null)) return false;
+      else if(ff==='__clean' && (fl.length || r.metrics?.monetized_months==null)) return false;
+      else if(ff==='__any' && !fl.length) return false;
+      else if(!['__none','__any','__clean','__ytdone','__ytnone'].includes(ff) && !fl.some(f=>f.startsWith(ff))) return false;
     }
     if(capOp){
       const cf=r.evaluation?.capability_fit;
