@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS listings (
     category      TEXT,
     biz_model     TEXT,
     content_type  TEXT,
+    asset_type    TEXT,          -- 譲渡物種別（公式分類: アカウント（YouTube）/ECサイト/WEBメディア 等）
     status        TEXT,          -- 詳細ページの「現在の運営状況」
     status_state  TEXT,          -- 募集中 / 成約済み / 受付終了
     deal_days     INTEGER,       -- 成約までの日数（成約済みのみ）
@@ -106,7 +107,7 @@ _LISTING_COLS = ["url", "title", "category", "biz_model", "content_type", "statu
                  "status_state", "deal_days", "listed_at", "updated_at",
                  "price", "price_str", "ratio_str",
                  "profit", "profit_str", "revenue", "revenue_str", "followers",
-                 "followers_str", "post_count", "start_date", "description"]
+                 "followers_str", "post_count", "start_date", "description", "asset_type"]
 
 
 def connect() -> sqlite3.Connection:
@@ -134,7 +135,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "risk_factor" not in ec:
         conn.execute("ALTER TABLE evaluations ADD COLUMN risk_factor REAL")
     lc = cols("listings")
-    for c in ("listed_at", "updated_at", "flags", "profit_series"):
+    for c in ("listed_at", "updated_at", "flags", "profit_series", "asset_type"):
         if c not in lc:
             conn.execute(f"ALTER TABLE listings ADD COLUMN {c} TEXT")
     for c in ("profit_min", "months", "monetized_months", "leading_zeros"):

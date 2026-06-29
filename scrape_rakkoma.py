@@ -159,6 +159,11 @@ def _fetch_detail(pid: str, url: str) -> dict | None:
     biz_model     = _get_field("収益モデル")
     content_type  = _get_field("コンテンツの性質")
 
+    # 譲渡物種別（ラッコ公式分類・JSON-LD）。YouTube/EC/ブログ/アプリ等を正確に判定するため全種別を保持
+    #   例: "アカウント（YouTube）" / "WEBメディア（ブログ/アフィリエイトサイト）" / "ECサイト" …
+    at_m = _re.search(r'"name"\s*:\s*"譲渡物種別"\s*,\s*"value"\s*:\s*"([^"]+)"', html)
+    asset_type = _htmllib.unescape(at_m.group(1)).strip() if at_m else ""
+
     # og:description を説明文として取得
     desc_m = _re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']{0,500})', html)
     description = desc_m.group(1).strip() if desc_m else ""
@@ -216,6 +221,7 @@ def _fetch_detail(pid: str, url: str) -> dict | None:
         "followers_str": followers_str,
         "biz_model":    biz_model,
         "content_type": content_type,
+        "asset_type":   asset_type,
         "description":  description,
         "fetched_at":   datetime.now(JST).isoformat(),
     }
