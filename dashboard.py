@@ -149,16 +149,21 @@ HTML = r"""<!DOCTYPE html>
   .ytc:first-of-type { border-top:none; }
   .ytc > b { display:inline-block; min-width:46px; }
   .ytc a { color:#6db3f2; margin:0 8px; text-decoration:none; } .ytc a:hover { text-decoration:underline; }
-  .ytb { margin:5px 0 4px 54px; font-size:14px; color:#a9c2dc;
-         background:#0e1a26; border-radius:6px; padding:7px 10px; }
-  .insight { margin:6px 0 2px 54px; font-size:14px; line-height:1.62; }
-  .inhead { color:#ffd27a; font-weight:700; font-size:15px; margin:2px 0 9px;
-            padding:8px 11px; background:#12202c; border-radius:6px; border-left:3px solid #ffb347; }
-  .insec { margin:0 0 9px; }
-  .institle { color:#7fd1c0; font-weight:700; margin:0 0 3px; font-size:14px; }
-  .insight ul { margin:0; padding-left:18px; } .insight li { margin:3px 0; color:#cdd9e5; }
+  .report { margin:7px 0 3px 54px; background:#0e1a26; border:1px solid #1c3145; border-radius:7px; }
+  .report > summary { cursor:pointer; padding:9px 12px; color:#ffd27a; font-weight:700;
+            font-size:15.5px; line-height:1.55; list-style:none; outline:none; }
+  .report > summary::-webkit-details-marker { display:none; }
+  .report > summary::before { content:'▸'; color:#7fb1e0; margin-right:8px; }
+  .report[open] > summary::before { content:'▾'; }
+  .report[open] > summary { border-bottom:1px solid #1c3145; color:#ffe3a8; }
+  .rbody { padding:10px 13px 13px; }
+  .ytb { margin:0 0 9px; font-size:14.5px; color:#a9c2dc; }
+  .insight { font-size:15.5px; line-height:1.7; }
+  .insec { margin:0 0 12px; }
+  .institle { color:#7fd1c0; font-weight:700; margin:0 0 4px; font-size:15.5px; }
+  .insight ul { margin:0; padding-left:19px; } .insight li { margin:5px 0; color:#d4dfea; }
   .inverdict { background:#1b1408; border-left:3px solid #ffb347; border-radius:6px;
-               padding:9px 12px; margin-top:4px; color:#ecdcc0; }
+               padding:11px 14px; margin-top:6px; color:#eddfc4; font-size:15.5px; line-height:1.7; }
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
@@ -310,19 +315,25 @@ function cell(c,r){
 function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 
 function ytConf(v){ return v>=0.7?'s-hi':v>=0.5?'s-mid':'s-lo'; }
-function insightReport(ins){
-  if(!ins) return '';
+function reportBlock(b){
+  if(!b) return '';
+  const era=`<div class="ytb">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）</div>`;
+  const ins=b.insight;
+  if(!ins){  // 掘り下げ未実施＝勝ち筋eraのみ（折りたたまずそのまま）
+    return `<div class="report"><div class="rbody">${era}<span class="mut">（未掘り下げ — match.py --benchmark で再解釈レポート生成）</span></div></div>`;
+  }
   const secs=(ins.sections||[]).map(s=>
     `<div class="insec"><div class="institle">${esc(s.title)}</div><ul>${(s.points||[]).map(p=>`<li>${esc(p)}</li>`).join('')}</ul></div>`).join('');
-  return `<div class="insight"><div class="inhead">📋 ${esc(ins.headline||'')}</div>${secs}`
-    +(ins.verdict?`<div class="inverdict"><b>総評</b> ${esc(ins.verdict)}</div>`:'')+`</div>`;
+  return `<details class="report"><summary>📋 詳細レポート — ${esc(ins.headline||'')}</summary>`
+    +`<div class="rbody">${era}<div class="insight">${secs}`
+    +(ins.verdict?`<div class="inverdict"><b>総評</b> ${esc(ins.verdict)}</div>`:'')
+    +`</div></div></details>`;
 }
 function ytSection(cands){
   const items=cands.map(c=>{
     const b=c.benchmark; let bench='';
     if(b){
-      bench=`<div class="ytb">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）</div>`
-          + insightReport(b.insight);
+      bench=reportBlock(b);
     }
     const subs=(c.subs==null)?'非公開':Number(c.subs).toLocaleString();
     return `<div class="ytc"><b class="${ytConf(c.confidence)}">${Math.round(c.confidence*100)}%</b>`
