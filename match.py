@@ -75,21 +75,24 @@ def _gen_queries(listing: dict) -> list[str]:
             cli = anthropic.Anthropic(api_key=key)
             prompt = (
                 "次はYouTubeチャンネルのM&A案件（匿名化済み・チャンネル名は不明）です。"
-                "このチャンネルを探すための日本語の検索クエリを1〜3個、視聴者が使う自然な語で。"
-                "ジャンル/トピックを表す語にし、チャンネル名は推測しないこと。\n\n"
+                "このチャンネルを検索で見つけるための日本語クエリを4〜6個。\n"
+                "重要: 広さに幅をつけること。①ジャンルを表す素直な2〜3語の組合せ"
+                "（例「MLB 翻訳 解説」「シニア 暮らし」）と ②もう少し具体的な語、の両方を混ぜる。\n"
+                "視聴者が実際に打つ自然な語にし、チャンネル名は推測しない。"
+                "専門的すぎる語（チャンネルに無いかもしれない語）は避け、素直なジャンル語を優先。\n\n"
                 f"案件名: {listing.get('title')}\nカテゴリ: {listing.get('category')}\n"
                 f"説明: {(listing.get('description') or '')[:800]}\n\n"
                 'JSON のみで返す: {"queries": ["...", "..."]}'
             )
             resp = cli.messages.create(
-                model=ANALYZER_MODEL, max_tokens=300,
+                model=ANALYZER_MODEL, max_tokens=400,
                 messages=[{"role": "user", "content": prompt}])
             txt = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
             txt = txt[txt.find("{"): txt.rfind("}") + 1]
             qs = json.loads(txt).get("queries", [])
             qs = [q.strip() for q in qs if isinstance(q, str) and q.strip()]
             if qs:
-                return qs[:3]
+                return qs[:6]
         except Exception as e:
             print(f"[warn] LLMクエリ生成失敗→素朴版: {e}", file=sys.stderr)
     # 素朴版フォールバック: カテゴリ＋案件名から記号を除いた語
@@ -101,10 +104,10 @@ def _gen_queries(listing: dict) -> list[str]:
 
 # ── YouTube Data API（read-only・APIキー）─────────────────────────────────────
 
-def _yt_search(key: str, q: str, n: int = 25) -> list[str]:
+def _yt_search(key: str, q: str, n: int = 50) -> list[str]:
     r = requests.get(f"{YT}/search", params={
         "key": key, "part": "snippet", "type": "channel", "q": q,
-        "maxResults": n, "regionCode": "JP", "relevanceLanguage": "ja",
+        "maxResults": min(n, 50), "regionCode": "JP", "relevanceLanguage": "ja",
     }, timeout=20)
     r.raise_for_status()
     return [it["id"]["channelId"] for it in r.json().get("items", [])
@@ -172,7 +175,9 @@ def _topic_score(listing, cand) -> float | None:
     return round(min(1.0, hit / max(3, len(set(toks)) * 0.5)), 3)
 
 
-_W = {"subs": 0.4, "videos": 0.3, "age": 0.15, "topic": 0.15}
+# 登録者・投稿は具体的な硬い数字。開始時期はラッコ自己申告で誤りが出る（実測で1年ズレを確認）
+# ため弱める＝"誤メタデータに一致するオトリ"を持ち上げない。topicは現状ほぼ無情報（弱め）。
+_W = {"subs": 0.45, "videos": 0.33, "age": 0.10, "topic": 0.12}
 
 
 def _score(listing, cand) -> dict:
