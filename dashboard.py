@@ -146,11 +146,11 @@ HTML = r"""<!DOCTYPE html>
   .detail h4.hStr { color:var(--good); } .detail h4.hWeak { color:var(--mid); }
   .ytsec { background:#0a1119; border:1px solid #25405a; border-left:3px solid #c4302b;
            border-radius:8px; padding:11px 14px 13px; margin-top:6px; }
-  .ytsec h4 { color:#ff7a6b; margin:0 0 8px; font-size:17px; }
+  .ytsec h4 { color:#ff7a6b; margin:0 0 10px; font-size:19px; }
   .ytc { padding:9px 2px; border-top:1px solid #1b2937; line-height:1.65; font-size:15px; }
   .ytc:first-of-type { border-top:none; }
-  .ytcline { font-size:16.5px; }
-  .ytcline > b { display:inline-block; min-width:48px; }
+  .ytcline { font-size:18px; }
+  .ytcline > b { display:inline-block; min-width:52px; font-size:19px; }
   .ytcline a { color:#6db3f2; margin:0 9px; text-decoration:none; } .ytcline a:hover { text-decoration:underline; }
   .ytstrip { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 2px; }
   .ytth { height:80px; width:auto; border-radius:4px; border:1px solid #1c2a3a; display:block; }
