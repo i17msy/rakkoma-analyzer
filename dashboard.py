@@ -203,6 +203,7 @@ HTML = r"""<!DOCTYPE html>
     <option value="">フラグ: すべて</option>
     <option value="__ytdone">🎥 YT検索済み</option>
     <option value="__ytnone">— YT未検索</option>
+    <option value="__report">📋 レポート済み</option>
     <option value="__clean">✨クリーン(系列✅)</option>
     <option value="__none">フラグなし(系列✖)</option>
     <option value="__any">フラグあり</option>
@@ -297,8 +298,12 @@ function cell(c,r){
     return `<a href="${u}" target="_blank" rel="noopener">${esc(v)}</a>`;
   }
   if(c.statePill) return stPill(v);
-  if(c.k==='flags') return flagCell(v) + ((r.candidates&&r.candidates.length)
-      ? ` <span class="ytdone" title="YouTube候補出し済み（${r.candidates.length}件）">🎥</span>` : '');
+  if(c.k==='flags'){
+    let m='';
+    if(r.candidates&&r.candidates.length) m+=` <span class="ytdone" title="YouTube候補出し済み（${r.candidates.length}件）">🎥</span>`;
+    if(r.candidates&&r.candidates.some(x=>x.benchmark&&x.benchmark.insight)) m+=` <span class="ytdone" title="再解釈レポート生成済み">📋</span>`;
+    return flagCell(v)+m;
+  }
   if(c.k==='verdict') return vPill(v);
   if(v==null) return '<span class="mut">–</span>';
   if(c.money) return yen(v);
@@ -420,12 +425,14 @@ function render(){
     if(ff){
       const fl=r.flags||[];
       const ytdone=!!(r.candidates&&r.candidates.length);
+      const hasrep=!!(r.candidates&&r.candidates.some(x=>x.benchmark&&x.benchmark.insight));
       if(ff==='__ytdone' && !ytdone) return false;
       else if(ff==='__ytnone' && ytdone) return false;
+      else if(ff==='__report' && !hasrep) return false;
       else if(ff==='__none' && (fl.length || r.metrics?.monetized_months!=null)) return false;
       else if(ff==='__clean' && (fl.length || r.metrics?.monetized_months==null)) return false;
       else if(ff==='__any' && !fl.length) return false;
-      else if(!['__none','__any','__clean','__ytdone','__ytnone'].includes(ff) && !fl.some(f=>f.startsWith(ff))) return false;
+      else if(!['__none','__any','__clean','__ytdone','__ytnone','__report'].includes(ff) && !fl.some(f=>f.startsWith(ff))) return false;
     }
     if(capOp){
       const cf=r.evaluation?.capability_fit;
