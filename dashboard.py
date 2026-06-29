@@ -88,15 +88,18 @@ HTML = r"""<!DOCTYPE html>
   header h1 { font-size:18px; margin:0; }
   header .meta { color:var(--mut); font-size:12px; }
   .controls { padding:10px 22px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;
-              border-bottom:1px solid var(--line); }
+              border-bottom:1px solid var(--line); position:sticky; top:0; z-index:30; background:var(--bg); }
   .controls input, .controls select { background:var(--panel); color:var(--fg);
               border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:12px; }
+  .controls button { background:var(--panel); color:var(--fg); border:1px solid var(--line);
+              border-radius:6px; padding:6px 11px; font-size:12px; cursor:pointer; }
+  .controls button:hover { border-color:var(--accent); }
   .controls .sp { flex:1; }
   table { width:100%; border-collapse:collapse; }
   th, td { padding:9px 10px; text-align:left; border-bottom:1px solid var(--line);
            white-space:nowrap; }
   th { color:var(--mut); font-weight:600; cursor:pointer; user-select:none; position:sticky;
-       top:0; z-index:20; background:var(--bg); font-size:12.5px; }
+       top:var(--ctrlh,52px); z-index:20; background:var(--bg); font-size:12.5px; }
   th:hover { color:var(--fg); }
   th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
   th.ctr, td.ctr { text-align:center; }
@@ -138,7 +141,7 @@ HTML = r"""<!DOCTYPE html>
   .bar { font-size:16px; } .bar b { color:var(--fg); }
   .dtitle { color:var(--accent); font-size:24px; font-weight:600; text-decoration:none; }
   .dtitle:hover { text-decoration:underline; }
-  .dtitlebar { position:sticky; top:33px; z-index:6; background:#0d121b;
+  .dtitlebar { position:sticky; top:calc(var(--ctrlh,52px) + 33px); z-index:6; background:#0d121b;
                padding:8px 0 9px; margin:-2px 0 3px; border-bottom:1px solid var(--line); }
   .bars.scores { gap:22px; padding-bottom:6px; border-bottom:1px solid var(--line); }
   .scores .bar { font-size:18px; } .scores b { font-size:23px; font-weight:700; }
@@ -231,6 +234,7 @@ HTML = r"""<!DOCTYPE html>
     <option value="実績安定">✅ 実績安定</option>
   </select>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
+  <button id="toggleAll" onclick="toggleAllRows()">▼ 全展開</button>
   <span class="sp"></span>
   <span class="meta mut">行クリックで詳細展開</span>
 </div>
@@ -488,11 +492,37 @@ function render(){
     const tds=COLS.map(c=>`<td class="${acl(c)} ${c.cls||''}">${cell(c,r)}</td>`).join('');
     return `<tr class="row" onclick="toggle(this)">${tds}</tr>`+detailRow(r,span);
   }).join('');
+  // 行を作り直したので全展開状態はリセット
+  _allOpen=false; const _ta=document.getElementById('toggleAll'); if(_ta) _ta.textContent='▼ 全展開';
 }
 function sortBy(k){ if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=(k==='verdict')?1:-1; } render(); }
 function toggle(tr){ const d=tr.nextElementSibling; const opening=d.classList.contains('hidden'); d.classList.toggle('hidden'); tr.classList.toggle('open', opening); }
 function closeDetail(ev,btn){ ev.stopPropagation(); const d=btn.closest('tr.detail'); d.classList.add('hidden'); if(d.previousElementSibling) d.previousElementSibling.classList.remove('open'); }
+
+// フィルター行(sticky)の実高さを測り、列見出し/案件名のstick位置をその下に合わせる
+function setCtrlH(){ const c=document.querySelector('.controls');
+  if(c) document.documentElement.style.setProperty('--ctrlh', c.offsetHeight+'px'); }
+
+// 表示中(フィルタ後)の案件を一括 開く/閉じる
+let _allOpen=false;
+function _expandAll(open){
+  document.querySelectorAll('#body tr.row').forEach(tr=>{
+    const d=tr.nextElementSibling;
+    if(d&&d.classList.contains('detail')){ d.classList.toggle('hidden',!open); tr.classList.toggle('open',open); }
+  });
+}
+function toggleAllRows(){
+  if(!_allOpen){
+    const n=document.querySelectorAll('#body tr.row').length;
+    if(n>60 && !confirm(n+'件を全部開きます。重くなる可能性があります。続けますか？')) return;
+  }
+  _allOpen=!_allOpen; _expandAll(_allOpen);
+  document.getElementById('toggleAll').textContent=_allOpen?'▲ 全閉じる':'▼ 全展開';
+}
+
 render();
+setCtrlH();
+window.addEventListener('resize', setCtrlH);
 </script>
 </body>
 </html>
