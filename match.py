@@ -216,7 +216,7 @@ def _save(conn, lid, scored):
 
 # ── メイン ────────────────────────────────────────────────────────────────────
 
-def run(lid: str, n: int = 5) -> int:
+def run(lid: str, n: int = 5, benchmark: bool = False) -> int:
     key = _api_key()
     if not key:
         print("YT_API_KEY 未設定（env か data/yt_api_key）。READMEの手順でAPIキーを用意してください。")
@@ -258,6 +258,16 @@ def run(lid: str, n: int = 5) -> int:
         print(f"       内訳 subs={p['subs']} videos={p['videos']} age={p['age']} topic={p['topic']}")
         print(f"       https://www.youtube.com/channel/{c['id']}")
     print("\n  ※ 登録者・投稿が同時に近い候補ほど確からしい。1指標だけ一致は低信頼。")
+
+    # --benchmark: 筆頭候補をそのままベンチマーク抽出まで連結（案件ID一発）
+    if benchmark and scored:
+        top = scored[0][0]
+        print(f"\n{'='*64}")
+        print(f"▼ 筆頭候補「{top['title']}」を自動ベンチマーク抽出（再生数→formula）")
+        print(f"  ※ 筆頭が誤りなら: python3 analyze_channel.py <正しいchID> で再実行")
+        print(f"{'='*64}")
+        import analyze_channel
+        analyze_channel.run(top["id"], top=3)
     return 0
 
 
@@ -266,10 +276,11 @@ def main():
     n = 5
     if "--n" in sys.argv:
         n = int(sys.argv[sys.argv.index("--n") + 1])
+    benchmark = "--benchmark" in sys.argv
     if not args:
-        print("使い方: python3 match.py <案件ID> [--n 5]")
+        print("使い方: python3 match.py <案件ID> [--n 5] [--benchmark]")
         sys.exit(2)
-    sys.exit(run(args[0], n))
+    sys.exit(run(args[0], n, benchmark=benchmark))
 
 
 if __name__ == "__main__":
