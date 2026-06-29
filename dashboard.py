@@ -140,11 +140,15 @@ HTML = r"""<!DOCTYPE html>
   .bar b.s-lo { color:var(--bad); } .bar b.s-mid { color:var(--mid); } .bar b.s-hi { color:var(--good); }
   .freshbar { padding:5px 10px; border-radius:6px; background:#1a2029; display:inline-block; font-size:14px; }
   .detail h4.hStr { color:var(--good); } .detail h4.hWeak { color:var(--mid); }
-  .ytc { padding:7px 0; border-top:1px solid var(--line); line-height:1.6; }
+  .ytsec { background:#0a1119; border:1px solid #25405a; border-left:3px solid #c4302b;
+           border-radius:8px; padding:11px 14px 13px; margin-top:6px; }
+  .ytsec h4 { color:#ff7a6b; margin:0 0 8px; }
+  .ytc { padding:7px 2px; border-top:1px solid #1b2937; line-height:1.6; }
   .ytc:first-of-type { border-top:none; }
   .ytc > b { display:inline-block; min-width:44px; }
   .ytc a { color:#6db3f2; margin:0 8px; text-decoration:none; } .ytc a:hover { text-decoration:underline; }
-  .ytb { margin:4px 0 2px 52px; font-size:13px; color:#a9c2dc; }
+  .ytb { margin:5px 0 2px 52px; font-size:13px; color:#a9c2dc;
+         background:#0e1a26; border-radius:6px; padding:6px 9px; }
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
@@ -312,7 +316,7 @@ function ytSection(cands){
       +`<a href="https://www.youtube.com/channel/${c.channel_id}" target="_blank" rel="noopener">${esc(c.title)}</a>`
       +`<span class="mut">登録${subs} / 投稿${c.videos} / 開設${c.published||'-'}</span>${bench}</div>`;
   }).join('');
-  return `<div class="full"><h4>🎥 YouTube候補（近似順・match.py）</h4>${items}</div>`;
+  return `<div class="full ytsec"><h4>🎥 YouTube候補（近似順・match.py）</h4>${items}</div>`;
 }
 function detailRow(r,span){
   const e=r.evaluation, m=r.metrics||{};
