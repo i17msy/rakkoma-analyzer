@@ -25,12 +25,13 @@ sys.path.insert(0, str(RAKKOMA_DIR))
 from config import (
     DATA_DIR, LISTINGS_DIR, POLL_INTERVAL_SEC,
     FEED_URL, BASE_URL, UA,
-    TIER1_MIN_PROFIT,
-    REPLICABLE_CONTENT_KEYWORDS,
-    YOUTUBE_TITLE_KEYWORDS,
-    ADSENSE_KEYWORDS,
+    YOUTUBE_TITLE_KEYWORDS, ADSENSE_KEYWORDS,
     SOLD_MARKER, WITHDRAWN_MARKER, DEAL_DAYS_RE,
+    NOTIFY_MIN_FIT, NOTIFY_MIN_OVERALL, NOTIFY_VERDICTS,
 )
+import storage
+import metrics
+import dashboard
 
 LOG_FILE  = RAKKOMA_DIR / "rakkoma.log"
 SEEN_FILE = DATA_DIR / "seen_listings.json"
@@ -231,63 +232,55 @@ def _is_youtube(detail: dict, title: str = "") -> bool:
         return True
     return False
 
-def _is_tier1(detail: dict) -> bool:
-    profit = detail.get("profit") or 0
-    return profit >= TIER1_MIN_PROFIT
+# ── LLM評価クライアント ────────────────────────────────────────────────────────
 
-def _is_tier2(detail: dict, title: str) -> bool:
-    text = " ".join([title, detail.get("description", ""), detail.get("content_type", ""), detail.get("biz_model", "")])
-    return any(kw in text for kw in REPLICABLE_CONTENT_KEYWORDS)
+def _get_client():
+    """ANTHROPIC_API_KEY があれば anthropic クライアント、無ければ None。"""
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return None
+    import anthropic
+    return anthropic.Anthropic(api_key=key)
 
-def _has_adsense(detail: dict) -> bool:
-    return any(kw in detail.get("biz_model", "") for kw in ADSENSE_KEYWORDS)
+# ── 厳選通知（評価ベース・「ダッシュボードを見るべき」）──────────────────────────
 
-# ── Slack 通知 ────────────────────────────────────────────────────────────────
+def _should_notify(ev: dict) -> bool:
+    """買い/様子見 × 適合≥N × 総合≥M を満たす案件だけ通知（厳選）。"""
+    return ((ev.get("capability_fit") or 0) >= NOTIFY_MIN_FIT
+            and ev.get("verdict") in NOTIFY_VERDICTS
+            and (ev.get("overall_score") or 0) >= NOTIFY_MIN_OVERALL)
 
-def _notify_slack(detail: dict, title: str, tier: int) -> None:
+def _notify_dashboard(detail: dict, ev: dict, met: dict, title: str) -> None:
     webhook = os.environ.get("SLACK_WEBHOOK_URL_RAKKOMA", "")
     if not webhook:
         log.warning("SLACK_WEBHOOK_URL_RAKKOMA 未設定 → 通知スキップ")
         return
-
-    tier_label = ":rotating_light: *Tier1 即時通知*" if tier == 1 else ":mag: *Tier2 研究候補*"
-    adsense = ":white_check_mark: アドセンスあり" if _has_adsense(detail) else ":x: アドセンスなし"
-
+    vmark = {"買い": ":fire:", "様子見": ":eyes:"}.get(ev.get("verdict"), "")
+    flags = " ".join(met.get("flags") or []) or "なし"
     blocks = [
-        {"type": "header", "text": {"type": "plain_text", "text": f"ラッコM&A 新着 [{tier_label.replace('*','').strip()}]"}},
-        {"type": "section", "text": {"type": "mrkdwn", "text": f"{tier_label}\n*{title}*"}},
+        {"type": "header", "text": {"type": "plain_text", "text": "🦦 要確認の新着 — ダッシュボードで精査を"}},
+        {"type": "section", "text": {"type": "mrkdwn",
+            "text": f"{vmark} *{ev.get('verdict')}*  ・  総合 *{ev.get('overall_score')}* / 適合 *{ev.get('capability_fit')}*  ・  ID `{detail['id']}`\n*{title}*"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"_{ev.get('summary','')}_"}},
         {"type": "section", "fields": [
-            {"type": "mrkdwn", "text": f"*利益/月（直近）*\n{detail.get('profit_str') or '不明'}"},
-            {"type": "mrkdwn", "text": f"*希望売却価格*\n{detail.get('price_str') or '不明'}"},
-            {"type": "mrkdwn", "text": f"*評価倍率*\n{detail.get('ratio_str') or '不明'}"},
-            {"type": "mrkdwn", "text": f"*登録者数*\n{detail.get('followers_str') or '不明'}"},
-            {"type": "mrkdwn", "text": f"*カテゴリ*\n{detail.get('category') or '不明'}"},
-            {"type": "mrkdwn", "text": f"*収益モデル*\n{adsense}"},
+            {"type": "mrkdwn", "text": f"*希望価格*\n{detail.get('price_str') or '不明'}"},
+            {"type": "mrkdwn", "text": f"*月利益(直近)*\n{detail.get('profit_str') or '不明'}"},
+            {"type": "mrkdwn", "text": f"*登録者*\n{detail.get('followers_str') or '不明'}"},
+            {"type": "mrkdwn", "text": f"*フラグ*\n{flags}"},
         ]},
-        {"type": "section", "fields": [
-            {"type": "mrkdwn", "text": f"*コンテンツ性質*\n{detail.get('content_type') or '不明'}"},
-            {"type": "mrkdwn", "text": f"*運営開始*\n{detail.get('start_date') or '不明'}"},
-        ]},
+        {"type": "context", "elements": [{"type": "mrkdwn",
+            "text": f"ダッシュボードで ID `{detail['id']}` を検索して精査してください"}]},
         {"type": "actions", "elements": [
-            {"type": "button", "text": {"type": "plain_text", "text": "案件を見る"}, "url": detail["url"], "style": "primary"},
+            {"type": "button", "text": {"type": "plain_text", "text": "ラッコで案件を見る"}, "url": detail["url"], "style": "primary"},
         ]},
     ]
-
     try:
         requests.post(webhook, json={"blocks": blocks}, timeout=10).raise_for_status()
-        log.info(f"[{detail['id']}] Slack通知送信 (Tier{tier})")
+        log.info(f"[{detail['id']}] 厳選通知: {ev.get('verdict')} 総合{ev.get('overall_score')} 適合{ev.get('capability_fit')}")
     except Exception as e:
-        log.error(f"[{detail['id']}] Slack通知失敗: {e}")
+        log.error(f"[{detail['id']}] 通知失敗: {e}")
 
-# ── 案件保存 ──────────────────────────────────────────────────────────────────
-
-def _save_listing(detail: dict, title: str, tier: int) -> None:
-    pid = detail["id"]
-    out = {**detail, "title": title, "tier": tier}
-    path = LISTINGS_DIR / f"{pid}.json"
-    path.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-
-# ── メインチェック ────────────────────────────────────────────────────────────
+# ── メインチェック（SQLite一元化 + 新着LLM評価 + 厳選通知）─────────────────────
 
 def check_once(dry_run: bool = False) -> int:
     entries = _fetch_feed()
@@ -295,51 +288,54 @@ def check_once(dry_run: bool = False) -> int:
         return 0
 
     seen = _load_seen()
-    notified = 0
+    conn = storage.init()
+    client = _get_client()
+    if client is None:
+        log.warning("ANTHROPIC_API_KEY 未設定 → 評価・通知なし（DB保存のみ）")
 
+    notified = added = 0
     for entry in entries:
-        pid   = entry["id"]
-        title = entry["title"]
-
+        pid, title = entry["id"], entry["title"]
         if pid in seen:
             continue
-
         seen.add(pid)
         _save_seen(seen)
 
-        # タイトル一次フィルター（詳細ページ取得の判断）
-        if not _is_video_related_title(title):
-            log.debug(f"[{pid}] スキップ（動画系タイトルなし）: {title[:50]}")
-            continue
-
-        log.info(f"[{pid}] 新着・動画系 → 詳細取得: {title[:60]}")
         detail = _fetch_detail(pid, entry["url"])
         if detail is None:
             continue
 
-        if not _is_youtube(detail, title):
-            log.info(f"[{pid}] YouTube非該当 (biz={detail.get('biz_model','')[:40]}): {title[:50]}")
+        # 全新着をSQLiteへ（メトリクス・系列・フラグ込み）
+        met = metrics.compute(detail)
+        storage.upsert_listing(conn, detail, met, title=detail.get("title") or title)
+        added += 1
+
+        # 動画系のみLLM評価（物販・Webサービス等はDB保存のみ）。鍵が無ければ評価せず
+        if not _is_youtube(detail, title) or client is None:
+            log.info(f"[{pid}] DB保存のみ（非動画 or 鍵なし）: {title[:40]}")
             continue
-
-        # Tier 判定
-        if _is_tier1(detail):
-            tier = 1
-        elif _is_tier2(detail, title):
-            tier = 2
-        else:
-            log.info(f"[{pid}] Tier対象外 (利益={detail.get('profit_str')}, 再現性KWなし): {title[:50]}")
-            _save_listing(detail, title, tier=0)
+        try:
+            import analyze
+            _m, ev, _u = analyze.evaluate(client, detail)
+        except Exception as e:
+            log.error(f"[{pid}] 評価失敗: {e}")
             continue
+        storage.save_evaluation(conn, pid, ev)
+        log.info(f"[{pid}] 評価: {ev['verdict']} 総合{ev['overall_score']} 適合{ev['capability_fit']} | {title[:32]}")
 
-        log.info(f"[{pid}] Tier{tier} 案件: 利益={detail.get('profit_str')} / 価格={detail.get('price_str')} / {title[:50]}")
-        _save_listing(detail, title, tier)
+        if _should_notify(ev):
+            if dry_run:
+                log.info(f"[{pid}] DRY-RUN: 厳選通知スキップ（{ev['verdict']}）")
+            else:
+                _notify_dashboard(detail, ev, met, detail.get("title") or title)
+            notified += 1
 
-        if dry_run:
-            log.info(f"[{pid}] DRY-RUN: Slack通知スキップ")
-        else:
-            _notify_slack(detail, title, tier)
-        notified += 1
-
+    # 新着があればダッシュボードを再生成（ライブ更新）
+    if added:
+        try:
+            dashboard.main()
+        except Exception as e:
+            log.error(f"ダッシュボード再生成失敗: {e}")
     return notified
 
 # ── デーモンループ ─────────────────────────────────────────────────────────────
@@ -353,7 +349,8 @@ def main() -> None:
     args = parser.parse_args()
 
     _setup_logging()
-    log.info(f"=== scrape_rakkoma 起動 ===  Tier1閾値={TIER1_MIN_PROFIT:,}円  ポーリング={POLL_INTERVAL_SEC}秒")
+    log.info(f"=== scrape_rakkoma 起動 ===  ポーリング={POLL_INTERVAL_SEC}秒  "
+             f"厳選通知=判定{'/'.join(NOTIFY_VERDICTS)}・適合≥{NOTIFY_MIN_FIT}・総合≥{NOTIFY_MIN_OVERALL}")
 
     if args.once:
         n = check_once(dry_run=args.dry_run)
