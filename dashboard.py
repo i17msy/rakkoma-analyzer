@@ -43,6 +43,7 @@ def _load_youtube(conn):
         for row in cur.fetchall():
             d = dict(zip(names, row))
             bench[d["channel_id"]] = {
+                "listing_id": d.get("listing_id"),   # レポートは生成元の案件でのみ表示する
                 "win_start": d.get("win_start"), "win_end": d.get("win_end"),
                 "win_count": d.get("win_count"), "cliff": d.get("cliff"),
                 "top_videos": json.loads(d.get("top_videos_json") or "[]"),
@@ -493,7 +494,8 @@ def main() -> None:
         if cs:
             for c in cs:
                 b = bench.get(c["channel_id"])
-                if b:
+                # ベンチ/レポートは「生成元の案件」でのみ紐付ける（別案件に同chが候補で出ても漏らさない）
+                if b and b.get("listing_id") == str(r["id"]):
                     c["benchmark"] = b
             r["candidates"] = cs
         ev = r.get("evaluation")
