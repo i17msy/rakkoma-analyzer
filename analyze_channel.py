@@ -19,6 +19,7 @@ import os
 import re
 import statistics
 import sys
+from datetime import datetime, timezone
 
 import requests
 
@@ -133,7 +134,27 @@ def _gemini_formula(gkey: str, vid: str, secs: int = 240) -> dict:
 
 # ── メイン ────────────────────────────────────────────────────────────────────
 
-def run(ch: str, top: int = 3) -> int:
+def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula):
+    """ダッシュボード表示用に channel_benchmark テーブルへ保存（channel_id 主キー）。"""
+    import storage
+    conn = storage.init()
+    conn.execute("""CREATE TABLE IF NOT EXISTS channel_benchmark(
+        channel_id TEXT PRIMARY KEY, listing_id TEXT,
+        win_start TEXT, win_end TEXT, win_count INTEGER, cliff TEXT,
+        monthly_json TEXT, top_videos_json TEXT, formula_json TEXT, fetched_at TEXT)""")
+    tv = [{"id": v["id"], "date": v["date"], "views": v["views"], "title": v["title"]} for v in topv]
+    conn.execute("INSERT OR REPLACE INTO channel_benchmark VALUES (?,?,?,?,?,?,?,?,?,?)", (
+        cid, listing_id,
+        win[0]["date"] if win else None, win[-1]["date"] if win else None,
+        len(win), cliff,
+        json.dumps(monthly, ensure_ascii=False),
+        json.dumps(tv, ensure_ascii=False),
+        json.dumps(formula, ensure_ascii=False) if formula is not None else None,
+        datetime.now(timezone.utc).isoformat()))
+    conn.commit()
+
+
+def run(ch: str, top: int = 3, listing_id: str | None = None) -> int:
     ykey = _key("YOUTUBE_API_KEY")
     if not ykey:
         print("YOUTUBE_API_KEY 未設定（env か ~/.bashrc）")
@@ -158,17 +179,20 @@ def run(ch: str, top: int = 3) -> int:
     for v in topv:
         print(f"  {v['views']:>9,} | {v['date']} | {v['title'][:40]}  ({v['id']})")
 
+    formula = None
     gkey = _key("GOOGLE_API_KEY")
-    if not gkey:
-        print("\nGOOGLE_API_KEY 未設定 → formula抽出スキップ（再生数分析のみ）")
-        return 0
-    if not topv:
-        print("勝ち筋動画なし → formula抽出スキップ")
-        return 0
+    if gkey and topv:
+        best = topv[0]
+        print(f"\n--- Gemini formula抽出（勝ち筋トップ {best['id']} / {best['views']:,}回・冒頭240秒）---")
+        formula = _gemini_formula(gkey, best["id"])
+        print(json.dumps(formula, ensure_ascii=False, indent=2))
+    elif not gkey:
+        print("\nGOOGLE_API_KEY 未設定 → formula抽出スキップ（再生数分析のみ・ダッシュには勝ち筋eraを保存）")
 
-    best = topv[0]
-    print(f"\n--- Gemini formula抽出（勝ち筋トップ {best['id']} / {best['views']:,}回・冒頭240秒）---")
-    print(json.dumps(_gemini_formula(gkey, best["id"]), ensure_ascii=False, indent=2))
+    try:
+        _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula)
+    except Exception as e:
+        print(f"[warn] ベンチマーク保存失敗: {e}", file=sys.stderr)
     return 0
 
 

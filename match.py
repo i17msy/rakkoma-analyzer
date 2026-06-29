@@ -267,7 +267,7 @@ def run(lid: str, n: int = 5, benchmark: bool = False) -> int:
         print(f"  ※ 筆頭が誤りなら: python3 analyze_channel.py <正しいchID> で再実行")
         print(f"{'='*64}")
         import analyze_channel
-        analyze_channel.run(top["id"], top=3)
+        analyze_channel.run(top["id"], top=3, listing_id=lid)
     return 0
 
 

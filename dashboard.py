@@ -24,6 +24,32 @@ def load() -> list[dict]:
     return DB.fetch_dashboard_rows(DB.init())
 
 
+def _load_youtube(conn):
+    """match.py / analyze_channel.py が貯めた候補ch・ベンチマークを読む（無ければ空）。"""
+    import sqlite3
+    cands, bench = {}, {}
+    try:
+        for r in conn.execute(
+            "SELECT listing_id, channel_id, channel_title, subs, videos, published, confidence "
+            "FROM channel_candidates WHERE status='candidate' ORDER BY confidence DESC"):
+            cands.setdefault(r[0], []).append({
+                "channel_id": r[1], "title": r[2], "subs": r[3],
+                "videos": r[4], "published": r[5], "confidence": r[6]})
+    except sqlite3.OperationalError:
+        pass
+    try:
+        for r in conn.execute(
+            "SELECT channel_id, win_start, win_end, win_count, cliff, top_videos_json, formula_json "
+            "FROM channel_benchmark"):
+            bench[r[0]] = {
+                "win_start": r[1], "win_end": r[2], "win_count": r[3], "cliff": r[4],
+                "top_videos": json.loads(r[5] or "[]"),
+                "formula": json.loads(r[6]) if r[6] else None}
+    except sqlite3.OperationalError:
+        pass
+    return cands, bench
+
+
 # ジャンル表示の短縮辞書（表示専用・長いキーから順に置換）。自由に追加可。
 GENRE_ABBR = [
     ("LINEリスト誘導型サービス販売", "LINEリスト誘導"),
@@ -114,6 +140,11 @@ HTML = r"""<!DOCTYPE html>
   .bar b.s-lo { color:var(--bad); } .bar b.s-mid { color:var(--mid); } .bar b.s-hi { color:var(--good); }
   .freshbar { padding:5px 10px; border-radius:6px; background:#1a2029; display:inline-block; font-size:14px; }
   .detail h4.hStr { color:var(--good); } .detail h4.hWeak { color:var(--mid); }
+  .ytc { padding:7px 0; border-top:1px solid var(--line); line-height:1.6; }
+  .ytc:first-of-type { border-top:none; }
+  .ytc > b { display:inline-block; min-width:44px; }
+  .ytc a { color:#6db3f2; margin:0 8px; text-decoration:none; } .ytc a:hover { text-decoration:underline; }
+  .ytb { margin:4px 0 2px 52px; font-size:13px; color:#a9c2dc; }
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
@@ -261,6 +292,25 @@ function cell(c,r){
 }
 function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 
+function ytConf(v){ return v>=0.7?'s-hi':v>=0.5?'s-mid':'s-lo'; }
+function ytSection(cands){
+  const items=cands.map(c=>{
+    const b=c.benchmark; let bench='';
+    if(b){
+      const f=b.formula||{}; let hook='';
+      if(f.hook_type){ hook=(f.hook_type.type||'')+(f.hook_type.text?`「${f.hook_type.text}」`:''); }
+      const summ=Array.isArray(f.formula_summary)?f.formula_summary.join(' '):(f.formula_summary||'');
+      bench=`<div class="ytb">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）`
+          +(hook?` ・ hook: ${esc(hook)}`:'')
+          +(summ?`<div class="mut" style="margin-top:3px;line-height:1.5">${esc(summ)}</div>`:'')+`</div>`;
+    }
+    const subs=(c.subs==null)?'非公開':Number(c.subs).toLocaleString();
+    return `<div class="ytc"><b class="${ytConf(c.confidence)}">${Math.round(c.confidence*100)}%</b>`
+      +`<a href="https://www.youtube.com/channel/${c.channel_id}" target="_blank" rel="noopener">${esc(c.title)}</a>`
+      +`<span class="mut">登録${subs} / 投稿${c.videos} / 開設${c.published||'-'}</span>${bench}</div>`;
+  }).join('');
+  return `<div class="full"><h4>🎥 YouTube候補（近似順・match.py）</h4>${items}</div>`;
+}
 function detailRow(r,span){
   const e=r.evaluation, m=r.metrics||{};
   if(!e){
@@ -315,6 +365,7 @@ function detailRow(r,span){
       <span class="bar mut">登録者1k人あたり利益 <b>${yen(m.profit_per_1k_subs)}</b></span>
       <span class="bar mut">収益モデル <b>${esc(r.biz_model||'–')}</b></span>
     </div>
+    ${r.candidates ? ytSection(r.candidates) : ''}
   </div></td></tr>`;
 }
 
@@ -390,8 +441,17 @@ render();
 
 
 def main() -> None:
-    rows = load()
+    conn = DB.init()
+    rows = DB.fetch_dashboard_rows(conn)
+    cands, bench = _load_youtube(conn)
     for r in rows:
+        cs = cands.get(str(r["id"]))   # listings.id=int / channel_candidates.listing_id=text のため正規化
+        if cs:
+            for c in cs:
+                b = bench.get(c["channel_id"])
+                if b:
+                    c["benchmark"] = b
+            r["candidates"] = cs
         ev = r.get("evaluation")
         if ev and ev.get("genre"):
             # 括弧の補足を除去 → 短縮辞書 → 念のため20字で丸め
