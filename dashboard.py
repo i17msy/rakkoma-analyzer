@@ -147,6 +147,21 @@ HTML = r"""<!DOCTYPE html>
     <option value="見送り">見送り</option>
     <option value="__none">未評価</option>
   </select>
+  <select id="ff" onchange="render()">
+    <option value="">フラグ: すべて</option>
+    <option value="__clean">✨クリーン(系列✅)</option>
+    <option value="__none">フラグなし(系列✖)</option>
+    <option value="__any">フラグあり</option>
+    <option value="交渉">🎯 交渉ターゲット(高総合×高滞留)</option>
+    <option value="急成長">🚀 急成長×ピーク</option>
+    <option value="ピーク売り">🔝 ピーク売り</option>
+    <option value="立上げ初期">🌱 立上げ初期</option>
+    <option value="高変動">⚡ 高変動</option>
+    <option value="停止復活">⛔ 停止復活歴</option>
+    <option value="下降">📉 下降トレンド</option>
+    <option value="運営乖離">⚠️ 運営乖離</option>
+    <option value="実績安定">✅ 実績安定</option>
+  </select>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
   <span class="sp"></span>
   <span class="meta mut">行クリックで詳細展開</span>
@@ -170,8 +185,8 @@ const COLS = [
   {k:'price',  label:'価格',     get:r=>r.price ?? null, num:true, money:true},
   {k:'payback',label:'回収月',   get:r=>r.metrics?.payback_months_recent ?? null, num:true},
   {k:'operating',label:'運営',   get:r=>r.operating_months ?? null, num:true},
-  {k:'listed', label:'掲載',     get:r=>r.listed_at ?? null, cls:'date', align:'right'},
   {k:'stale',  label:'滞留',     get:r=>r.days_listed ?? null, num:true},
+  {k:'listed', label:'掲載',     get:r=>r.listed_at ?? null, cls:'date', align:'right'},
   {k:'genre',  label:'ジャンル', get:r=>r.evaluation?.genre||'', cls:'genre'},
 ];
 let sortKey='cap', sortDir=-1;   // 既定: 適合(降順) → 総合(降順)
@@ -190,6 +205,7 @@ function stPill(v){
   return v ? `<span class="pill ${m[v]||'v-none'}">${v}</span>` : '<span class="mut">–</span>';
 }
 function flagIcon(f){
+  if(f.startsWith('交渉'))       return '🎯';
   if(f.startsWith('立上げ初期')) return '🌱';
   if(f.startsWith('急成長'))     return '🚀';
   if(f.startsWith('ピーク売り')) return '🔝';
@@ -201,12 +217,13 @@ function flagIcon(f){
   if(f.startsWith('収益ゼロ'))   return '🚫';
   return '🏷';
 }
-const FLAG_PRIORITY=['運営乖離','停止復活','急成長','ピーク売り','立上げ初期','高変動','下降','実績安定'];
+const FLAG_PRIORITY=['交渉','運営乖離','停止復活','急成長','ピーク売り','立上げ初期','高変動','下降','実績安定'];
 function flagRank(f){ for(let i=0;i<FLAG_PRIORITY.length;i++) if(f.startsWith(FLAG_PRIORITY[i])) return i; return 99; }
 function flagCell(fl){
   if(!fl || !fl.length) return '<span class="mut">–</span>';
   const s=[...fl].sort((a,b)=>flagRank(a)-flagRank(b));
-  return `<span title="${esc(s.join(' / '))}">${s.map(flagIcon).join('')}</span>`;
+  const names=s.map(f=>f.replace('急成長×ピーク売り抜け','急成長×ピーク'));
+  return `<span title="${esc(names.join(' / '))}">${s.map(flagIcon).join('')}</span>`;
 }
 // 履歴インサイト: 運営/収益化/立上げ/乖離 を1つのライフサイクル判定に合成
 function lifecycle(op, mm, gap){
@@ -296,6 +313,7 @@ function render(){
   const capOp=document.getElementById('capOp').value;
   const capVal=+document.getElementById('capVal').value;
   const vf=document.getElementById('vf').value;
+  const ff=document.getElementById('ff').value;
   const sf=document.getElementById('sf').value;
   const evalOnly=document.getElementById('evalOnly').checked;
 
@@ -304,6 +322,13 @@ function render(){
     if(sf && r.status_state!==sf) return false;
     if(vf==='__none' && r.evaluation) return false;
     if(vf && vf!=='__none' && r.evaluation?.verdict!==vf) return false;
+    if(ff){
+      const fl=r.flags||[];
+      if(ff==='__none' && (fl.length || r.metrics?.monetized_months!=null)) return false;
+      if(ff==='__clean' && (fl.length || r.metrics?.monetized_months==null)) return false;
+      if(ff==='__any' && !fl.length) return false;
+      if(ff!=='__none' && ff!=='__any' && ff!=='__clean' && !fl.some(f=>f.startsWith(ff))) return false;
+    }
     if(capOp){
       const cf=r.evaluation?.capability_fit;
       if(cf==null) return false;
@@ -363,6 +388,11 @@ def main() -> None:
         # 運営乖離（収益化月数 ≫ 運営月数 = 再販/移管の疑い）をフラグに格上げ
         if (r.get("history_gap") or 0) >= 3 and "運営乖離" not in r.get("flags", []):
             r.setdefault("flags", []).append("運営乖離")
+        # 交渉ターゲット: 募集中×総合良好×滞留長 = オーバープライスで売れ残る良案件（値下げ待ち）
+        ov = (ev or {}).get("overall_score")
+        if (r.get("status_state") == "募集中" and ov is not None and ov >= 2.0
+                and (r.get("days_listed") or 0) >= 30):
+            r.setdefault("flags", []).append("交渉ターゲット")
     data = json.dumps(rows, ensure_ascii=False).replace("</", "<\\/")
     generated = datetime.now(JST).strftime("%Y-%m-%d %H:%M JST")
     html = HTML.replace("__DATA__", data).replace("__GENERATED__", generated)

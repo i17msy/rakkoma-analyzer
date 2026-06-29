@@ -56,7 +56,7 @@ def _series_shape(series: list[int]) -> dict:
 
     flags = []
     if trend is not None and trend >= 50 and recent_vs_max and recent_vs_max >= 0.8:
-        flags.append("急成長×ピーク売り抜け")
+        flags.append("急成長×ピーク")
     elif recent_vs_max and recent_vs_max >= 0.9:
         flags.append("ピーク売り")
     if mm <= 6:
