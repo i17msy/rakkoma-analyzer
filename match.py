@@ -36,7 +36,7 @@ KEY_FILE = DATA_DIR / "yt_api_key"
 # ── 認証・入出力 ──────────────────────────────────────────────────────────────
 
 def _api_key() -> str | None:
-    k = os.environ.get("YT_API_KEY")
+    k = os.environ.get("YOUTUBE_API_KEY") or os.environ.get("YT_API_KEY")
     if k:
         return k.strip()
     if KEY_FILE.exists():

@@ -39,6 +39,7 @@ docker run -d \
     -e "R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}" \
     -e "R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}" \
     -e "R2_BUCKET=${R2_RAKKOMA_BUCKET:-}" \
+    -e "YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}" \
     -v "${HOST_DIR}:/root/rakkoma" \
     "$IMAGE"
 
