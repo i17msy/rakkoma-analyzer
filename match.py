@@ -268,6 +268,14 @@ def run(lid: str, n: int = 5, benchmark: bool = False) -> int:
         print(f"{'='*64}")
         import analyze_channel
         analyze_channel.run(top["id"], top=3, listing_id=lid)
+
+    # 候補保存後にダッシュボードを再生成（照合→即ダッシュ反映＝一気通貫）
+    try:
+        import dashboard
+        print()
+        dashboard.main()
+    except Exception as e:
+        print(f"[warn] ダッシュ再生成失敗: {e}", file=sys.stderr)
     return 0
 
 
