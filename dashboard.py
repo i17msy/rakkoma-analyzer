@@ -138,6 +138,8 @@ HTML = r"""<!DOCTYPE html>
   .bar { font-size:16px; } .bar b { color:var(--fg); }
   .dtitle { color:var(--accent); font-size:24px; font-weight:600; text-decoration:none; }
   .dtitle:hover { text-decoration:underline; }
+  .dtitlebar { position:sticky; top:33px; z-index:6; background:#0d121b;
+               padding:8px 0 9px; margin:-2px 0 3px; border-bottom:1px solid var(--line); }
   .bars.scores { gap:22px; padding-bottom:6px; border-bottom:1px solid var(--line); }
   .scores .bar { font-size:18px; } .scores b { font-size:23px; font-weight:700; }
   .scores b.s-hi { color:var(--good); } .scores b.s-mid { color:var(--mid); } .scores b.s-lo { color:var(--bad); }
@@ -145,8 +147,13 @@ HTML = r"""<!DOCTYPE html>
   .freshbar { padding:5px 10px; border-radius:6px; background:#1a2029; display:inline-block; font-size:14px; }
   .detail h4.hStr { color:var(--good); } .detail h4.hWeak { color:var(--mid); }
   .ytsec { background:#0a1119; border:1px solid #25405a; border-left:3px solid #c4302b;
-           border-radius:8px; padding:11px 14px 13px; margin-top:6px; }
-  .ytsec h4 { color:#ff7a6b; margin:0 0 11px; font-size:22px; }
+           border-radius:8px; padding:0 14px; margin-top:6px; }
+  .ytsec[open] { padding-bottom:13px; }
+  .ytsec > summary { color:#ff7a6b; font-size:22px; font-weight:700; cursor:pointer;
+           padding:11px 0 9px; list-style:none; outline:none; }
+  .ytsec > summary::-webkit-details-marker { display:none; }
+  .ytsec > summary::before { content:'▸'; color:#7fb1e0; margin-right:9px; }
+  .ytsec[open] > summary::before { content:'▾'; }
   .ytc { padding:9px 2px; border-top:1px solid #1b2937; line-height:1.65; font-size:15px; }
   .ytc:first-of-type { border-top:none; }
   .ytcline { font-size:19px; }
@@ -356,7 +363,7 @@ function ytSection(cands){
       +`<span class="mut">登録${subs} / 投稿${c.videos} / 開設${c.published||'-'}</span>${age}</div>`
       +(thumbs?`<div class="ytstrip">${thumbs}</div>`:'')+`</div>`;
   }).join('');
-  return `<div class="full ytsec"><h4>🎥 YouTube候補（近似順・サムネで設計を見る）</h4>${items}</div>`;
+  return `<details class="full ytsec" open><summary>🎥 YouTube候補（近似順・サムネで設計を見る・${cands.length}件）</summary>${items}</details>`;
 }
 function detailRow(r,span){
   const e=r.evaluation, m=r.metrics||{};
@@ -381,7 +388,7 @@ function detailRow(r,span){
     : '';
   return `<tr class="detail hidden"><td colspan="${span}"><div class="inner">
     <button class="closeBtn" onclick="closeDetail(event,this)" title="閉じる">×</button>
-    <div class="full"><a href="${r.url||'#'}" target="_blank" rel="noopener" class="dtitle">${esc(r.title||'')}</a></div>
+    <div class="full dtitlebar"><a href="${r.url||'#'}" target="_blank" rel="noopener" class="dtitle">${esc(r.title||'')}</a></div>
     ${_fresh}
     <div class="full bars scores">
       <span class="bar mut">ID <b>${r.id}</b></span>
