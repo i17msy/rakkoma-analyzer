@@ -193,10 +193,10 @@ HTML = r"""<!DOCTYPE html>
     <option value="停止復活">⛔ 停止復活歴</option>
     <option value="下降">📉 下降トレンド</option>
     <option value="運営乖離">⚠️ 運営乖離</option>
-    <option value="収益不明">❓ 収益不明(系列なし)</option>
+    <option value="収益不明">❓ 収益不明(系列✖)</option>
     <option value="実績安定">✅ 実績安定</option>
-    <option value="__ytdone">🎥 YouTube候補 出し済み</option>
-    <option value="__ytnone">— YouTube候補 未出し</option>
+    <option value="__ytdone">🎥 YT検索済み</option>
+    <option value="__ytnone">— YT未検索</option>
   </select>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
   <span class="sp"></span>
