@@ -93,7 +93,8 @@ def compute(detail: dict) -> dict:
     else:
         s = parse_profit_series(detail.get("profit_str", ""))
         recent, avg, mx, mn, months = s["recent"], s["avg"], s["max"], None, None
-        shape = {}
+        # 月次系列が無い＝持続性/トレンドを検証できない＝判断不能。リスク割引で総合を引く。
+        shape = {"flags": ["収益不明"]}
 
     return {
         "profit_recent": recent,                       # 直近月利益（円）

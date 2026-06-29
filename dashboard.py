@@ -162,6 +162,7 @@ HTML = r"""<!DOCTYPE html>
     <option value="停止復活">⛔ 停止復活歴</option>
     <option value="下降">📉 下降トレンド</option>
     <option value="運営乖離">⚠️ 運営乖離</option>
+    <option value="収益不明">❓ 収益不明(系列なし)</option>
     <option value="実績安定">✅ 実績安定</option>
   </select>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
@@ -216,10 +217,11 @@ function flagIcon(f){
   if(f.startsWith('下降'))       return '📉';
   if(f.startsWith('運営乖離'))   return '⚠️';
   if(f.startsWith('実績安定'))   return '✅';
+  if(f.startsWith('収益不明'))   return '❓';
   if(f.startsWith('収益ゼロ'))   return '🚫';
   return '🏷';
 }
-const FLAG_PRIORITY=['交渉','運営乖離','停止復活','急成長','ピーク売り','立上げ初期','高変動','下降','実績安定'];
+const FLAG_PRIORITY=['交渉','収益不明','収益ゼロ','運営乖離','停止復活','急成長','ピーク売り','立上げ初期','高変動','下降','実績安定'];
 function flagRank(f){ for(let i=0;i<FLAG_PRIORITY.length;i++) if(f.startsWith(FLAG_PRIORITY[i])) return i; return 99; }
 function flagCell(fl){
   if(!fl || !fl.length) return '<span class="mut">–</span>';
