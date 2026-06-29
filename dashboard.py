@@ -111,7 +111,8 @@ HTML = r"""<!DOCTYPE html>
   .bars.scores { gap:22px; padding-bottom:6px; border-bottom:1px solid var(--line); }
   .scores .bar { font-size:18px; } .scores b { font-size:23px; font-weight:700; }
   .scores b.s-hi { color:var(--good); } .scores b.s-mid { color:var(--mid); } .scores b.s-lo { color:var(--bad); }
-  .bar b.s-lo { color:var(--bad); }
+  .bar b.s-lo { color:var(--bad); } .bar b.s-mid { color:var(--mid); } .bar b.s-hi { color:var(--good); }
+  .freshbar { padding:5px 10px; border-radius:6px; background:#1a2029; display:inline-block; font-size:14px; }
   .detail h4.hStr { color:var(--good); } .detail h4.hWeak { color:var(--mid); }
   .mut { color:var(--mut); }
   .hidden { display:none; }
@@ -128,6 +129,7 @@ HTML = r"""<!DOCTYPE html>
   <select id="sf" onchange="render()">
     <option value="">状態: すべて</option>
     <option value="募集中">募集中</option>
+    <option value="__closed">クローズ</option>
     <option value="成約済み">成約済み</option>
     <option value="受付終了">受付終了</option>
   </select>
@@ -152,7 +154,7 @@ HTML = r"""<!DOCTYPE html>
     <option value="__clean">✨クリーン(系列✅)</option>
     <option value="__none">フラグなし(系列✖)</option>
     <option value="__any">フラグあり</option>
-    <option value="交渉">🎯 交渉ターゲット(高総合×高滞留)</option>
+    <option value="交渉">🎯 交渉ターゲット</option>
     <option value="急成長">🚀 急成長×ピーク</option>
     <option value="ピーク売り">🔝 ピーク売り</option>
     <option value="立上げ初期">🌱 立上げ初期</option>
@@ -273,9 +275,15 @@ function detailRow(r,span){
   const lc = lifecycle(_op, _mm, r.history_gap);
   const opStr = _op==null ? '–' : (_op/12).toFixed(1)+'年';
   const histSub = `運営${opStr} / 収益化${monStr}${ramp?` / 立上げ${ramp}ヶ月`:''}`;
+  const _age=r.data_age_months, _closed=r.status_state!=='募集中';
+  const _ac=_age==null?'':(_age>=6?'s-lo':_age>=3?'s-mid':'s-hi');
+  const _fresh=(_closed||(_age!=null&&_age>=4))
+    ? `<div class="full"><span class="freshbar mut">📅 ${_closed?'過去データ(売買当時)':'データ更新'} <b class="${_ac}">${(r.updated_at||r.listed_at||'?')}時点 ・ ${_age==null?'?':_age+'ヶ月前'}</b>${_closed?' — 直近/勢いは当時の断面':''}</span></div>`
+    : '';
   return `<tr class="detail hidden"><td colspan="${span}"><div class="inner">
     <button class="closeBtn" onclick="closeDetail(event,this)" title="閉じる">×</button>
     <div class="full"><a href="${r.url||'#'}" target="_blank" rel="noopener" class="dtitle">${esc(r.title||'')}</a></div>
+    ${_fresh}
     <div class="full bars scores">
       <span class="bar mut">ID <b>${r.id}</b></span>
       <span class="bar">${flagCell(r.flags)}</span>
@@ -319,7 +327,10 @@ function render(){
 
   let rows=DATA.filter(r=>{
     if(evalOnly && !r.evaluation) return false;
-    if(sf && r.status_state!==sf) return false;
+    if(sf){
+      if(sf==='__closed'){ if(r.status_state!=='成約済み' && r.status_state!=='受付終了') return false; }
+      else if(r.status_state!==sf) return false;
+    }
     if(vf==='__none' && r.evaluation) return false;
     if(vf && vf!=='__none' && r.evaluation?.verdict!==vf) return false;
     if(ff){
@@ -388,10 +399,7 @@ def main() -> None:
         # 運営乖離（収益化月数 ≫ 運営月数 = 再販/移管の疑い）をフラグに格上げ
         if (r.get("history_gap") or 0) >= 3 and "運営乖離" not in r.get("flags", []):
             r.setdefault("flags", []).append("運営乖離")
-        # 交渉ターゲット: 募集中×(買い/様子見)×総合≥2.0×持続≥3×滞留≥30
-        #   = 収益が健全(持続≥3)なのに市場で動いていない＝価格ネック（オーバープライス→値下げ待ち）。
-        #   持続≤2の崩壊中案件（例 ID21998: アニメ化カタリスト賭けだが収益崩壊）は価格では直らず除外。
-        #   見送りも「降りない頑固な売り手(滞留500日級) or 根本問題」が多く除外。
+        # 交渉ターゲット: 募集中×(買い/様子見)×総合≥2.0×持続≥3×滞留≥30 = 収益健全なのに高くて売れ残り
         ov = (ev or {}).get("overall_score")
         sus = ((ev or {}).get("scores") or {}).get("sustainability") or 0
         if (r.get("status_state") == "募集中" and ov is not None and ov >= 2.0

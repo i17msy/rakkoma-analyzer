@@ -231,6 +231,13 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
         except Exception:
             return None
 
+    def _months_since(s):
+        """YYYY-MM-DD → 今日までの月数（データ鮮度用）。"""
+        if not s:
+            return None
+        m = re.match(r"(\d{4})-(\d{1,2})", s)
+        return max(0, (today.year - int(m.group(1))) * 12 + (today.month - int(m.group(2)))) if m else None
+
     def _operating_months(s):
         """運営開始時期 'YYYY年MM月' → 今日までの運営月数。"""
         if not s:
@@ -251,6 +258,7 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
             "deal_days": r["deal_days"], "listed_at": r["listed_at"], "updated_at": r["updated_at"],
             "days_listed": _days_since(r["listed_at"]),
             "operating_months": _operating_months(r["start_date"]),
+            "data_age_months": _months_since(r["updated_at"] or r["listed_at"]),
             "history_gap": ((r["monetized_months"] - _operating_months(r["start_date"]))
                             if (r["monetized_months"] is not None
                                 and _operating_months(r["start_date"]) is not None) else None),
