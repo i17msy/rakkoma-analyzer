@@ -388,9 +388,14 @@ def main() -> None:
         # 運営乖離（収益化月数 ≫ 運営月数 = 再販/移管の疑い）をフラグに格上げ
         if (r.get("history_gap") or 0) >= 3 and "運営乖離" not in r.get("flags", []):
             r.setdefault("flags", []).append("運営乖離")
-        # 交渉ターゲット: 募集中×総合良好×滞留長 = オーバープライスで売れ残る良案件（値下げ待ち）
+        # 交渉ターゲット: 募集中×(買い/様子見)×総合≥2.0×持続≥3×滞留≥30
+        #   = 収益が健全(持続≥3)なのに市場で動いていない＝価格ネック（オーバープライス→値下げ待ち）。
+        #   持続≤2の崩壊中案件（例 ID21998: アニメ化カタリスト賭けだが収益崩壊）は価格では直らず除外。
+        #   見送りも「降りない頑固な売り手(滞留500日級) or 根本問題」が多く除外。
         ov = (ev or {}).get("overall_score")
+        sus = ((ev or {}).get("scores") or {}).get("sustainability") or 0
         if (r.get("status_state") == "募集中" and ov is not None and ov >= 2.0
+                and (ev or {}).get("verdict") in ("買い", "様子見") and sus >= 3
                 and (r.get("days_listed") or 0) >= 30):
             r.setdefault("flags", []).append("交渉ターゲット")
     data = json.dumps(rows, ensure_ascii=False).replace("</", "<\\/")
