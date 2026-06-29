@@ -30,11 +30,12 @@ def _load_youtube(conn):
     cands, bench = {}, {}
     try:
         for r in conn.execute(
-            "SELECT listing_id, channel_id, channel_title, subs, videos, published, confidence "
+            "SELECT listing_id, channel_id, channel_title, subs, videos, published, confidence, thumbs_json "
             "FROM channel_candidates WHERE status='candidate' ORDER BY confidence DESC"):
             cands.setdefault(r[0], []).append({
                 "channel_id": r[1], "title": r[2], "subs": r[3],
-                "videos": r[4], "published": r[5], "confidence": r[6]})
+                "videos": r[4], "published": r[5], "confidence": r[6],
+                "thumbs": json.loads(r[7]) if r[7] else []})
     except sqlite3.OperationalError:
         pass
     try:
@@ -146,10 +147,12 @@ HTML = r"""<!DOCTYPE html>
   .ytsec { background:#0a1119; border:1px solid #25405a; border-left:3px solid #c4302b;
            border-radius:8px; padding:11px 14px 13px; margin-top:6px; }
   .ytsec h4 { color:#ff7a6b; margin:0 0 8px; font-size:17px; }
-  .ytc { padding:8px 2px; border-top:1px solid #1b2937; line-height:1.65; font-size:15px; }
+  .ytc { padding:9px 2px; border-top:1px solid #1b2937; line-height:1.65; font-size:15px; }
   .ytc:first-of-type { border-top:none; }
-  .ytc > b { display:inline-block; min-width:46px; }
-  .ytc a { color:#6db3f2; margin:0 8px; text-decoration:none; } .ytc a:hover { text-decoration:underline; }
+  .ytcline > b { display:inline-block; min-width:46px; }
+  .ytcline a { color:#6db3f2; margin:0 8px; text-decoration:none; } .ytcline a:hover { text-decoration:underline; }
+  .ytstrip { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 2px; }
+  .ytth { height:80px; width:auto; border-radius:4px; border:1px solid #1c2a3a; display:block; }
   .report { margin:7px 0 3px 54px; background:#0e1a26; border:1px solid #1c3145; border-radius:7px; }
   .report > summary { cursor:pointer; padding:9px 12px; color:#ffd27a; font-weight:700;
             font-size:15.5px; line-height:1.55; list-style:none; outline:none; }
@@ -204,7 +207,6 @@ HTML = r"""<!DOCTYPE html>
     <option value="">フラグ: すべて</option>
     <option value="__ytdone">🎥 YT検索済み</option>
     <option value="__ytnone">— YT未検索</option>
-    <option value="__report">📋 レポート済み</option>
     <option value="__clean">✨クリーン(系列✅)</option>
     <option value="__none">フラグなし(系列✖)</option>
     <option value="__any">フラグあり</option>
@@ -236,6 +238,7 @@ const COLS = [
   {k:'cap',    label:'適合',     get:r=>r.evaluation?.capability_fit ?? null, num:true, s5:true, align:'center'},
   {k:'overall',label:'総合',     get:r=>r.evaluation?.overall_score ?? null, num:true, score:true, align:'center'},
   {k:'verdict',label:'判定',     get:r=>r.evaluation?.verdict ?? null, align:'center'},
+  {k:'ytmatch',label:'YT',       get:r=>(r.candidates&&r.candidates.length)?r.candidates[0].confidence:null, num:true, align:'center'},
   {k:'flags',  label:'🚩',       get:r=>r.flags||[], cls:'flags', align:'center'},
   {k:'mom',    label:'勢',       get:r=>r.metrics?.stability ?? null, cls:'mom', align:'center'},
   {k:'profit', label:'平均利益', get:r=>r.metrics?.profit_avg ?? r.profit ?? null, num:true, money:true},
@@ -300,11 +303,10 @@ function cell(c,r){
   }
   if(c.statePill) return stPill(v);
   if(c.k==='flags'){
-    let m='';
-    if(r.candidates&&r.candidates.length) m+=` <span class="ytdone" title="YouTube候補出し済み（${r.candidates.length}件）">🎥</span>`;
-    if(r.candidates&&r.candidates.some(x=>x.benchmark&&x.benchmark.insight)) m+=` <span class="ytdone" title="再解釈レポート生成済み">📋</span>`;
+    const m=(r.candidates&&r.candidates.length)?` <span class="ytdone" title="YouTube候補出し済み（${r.candidates.length}件）">🎥</span>`:'';
     return flagCell(v)+m;
   }
+  if(c.k==='ytmatch') return v==null?'<span class="mut">–</span>':`<span class="${ytConf(v)}">${Math.round(v*100)}%</span>`;
   if(c.k==='verdict') return vPill(v);
   if(v==null) return '<span class="mut">–</span>';
   if(c.money) return yen(v);
@@ -339,17 +341,17 @@ function reportBlock(b){
     +`</div></div></details>`;
 }
 function ytSection(cands){
+  // レポートは一旦非表示（データはDBに温存）。サムネで設計を視覚スキャンする方を主役に。
   const items=cands.map(c=>{
-    const b=c.benchmark; let bench='';
-    if(b){
-      bench=reportBlock(b);
-    }
     const subs=(c.subs==null)?'非公開':Number(c.subs).toLocaleString();
-    return `<div class="ytc"><b class="${ytConf(c.confidence)}">${Math.round(c.confidence*100)}%</b>`
+    const thumbs=(c.thumbs||[]).map(u=>`<img class="ytth" loading="lazy" src="${esc(u)}">`).join('');
+    return `<div class="ytc"><div class="ytcline">`
+      +`<b class="${ytConf(c.confidence)}">${Math.round(c.confidence*100)}%</b>`
       +`<a href="https://www.youtube.com/channel/${c.channel_id}" target="_blank" rel="noopener">${esc(c.title)}</a>`
-      +`<span class="mut">登録${subs} / 投稿${c.videos} / 開設${c.published||'-'}</span>${bench}</div>`;
+      +`<span class="mut">登録${subs} / 投稿${c.videos} / 開設${c.published||'-'}</span></div>`
+      +(thumbs?`<div class="ytstrip">${thumbs}</div>`:'')+`</div>`;
   }).join('');
-  return `<div class="full ytsec"><h4>🎥 YouTube候補（近似順・match.py）</h4>${items}</div>`;
+  return `<div class="full ytsec"><h4>🎥 YouTube候補（近似順・サムネで設計を見る）</h4>${items}</div>`;
 }
 function detailRow(r,span){
   const e=r.evaluation, m=r.metrics||{};

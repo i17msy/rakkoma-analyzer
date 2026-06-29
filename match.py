@@ -199,24 +199,52 @@ def _score(listing, cand) -> dict:
     return {"confidence": conf, "parts": parts}
 
 
-# ── 永続化（v2のダッシュ描画/断定用に残す）────────────────────────────────────
+def _video_thumbs(key: str, cid: str, n: int = 10) -> list[str]:
+    """候補chの直近n本の動画サムネURL（uploads playlist = UU+ID）。設計を視覚スキャンする用。"""
+    up = "UU" + cid[2:]
+    try:
+        r = requests.get(f"{YT}/playlistItems", params={
+            "key": key, "part": "snippet", "playlistId": up, "maxResults": n}, timeout=20)
+        if r.status_code == 403 and "quota" in r.text.lower():
+            raise _QuotaExceeded("thumbs")
+        if r.status_code != 200:
+            return []
+        out = []
+        for it in r.json().get("items", []):
+            th = it["snippet"].get("thumbnails", {})
+            u = (th.get("medium") or th.get("default") or {}).get("url")
+            if u:
+                out.append(u)
+        return out
+    except _QuotaExceeded:
+        raise
+    except Exception:
+        return []
 
-def _save(conn, lid, scored):
+
+# ── 永続化（ダッシュ描画/断定用）──────────────────────────────────────────────
+
+def _save(conn, lid, scored, key):
     conn.execute("""CREATE TABLE IF NOT EXISTS channel_candidates(
         listing_id TEXT, channel_id TEXT, channel_title TEXT,
         subs INTEGER, videos INTEGER, published TEXT,
         confidence REAL, breakdown_json TEXT, fetched_at TEXT,
-        status TEXT DEFAULT 'candidate',
+        status TEXT DEFAULT 'candidate', thumbs_json TEXT,
         PRIMARY KEY(listing_id, channel_id))""")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(channel_candidates)")}
+    if "thumbs_json" not in cols:                                  # 既存テーブルへ追加
+        conn.execute("ALTER TABLE channel_candidates ADD COLUMN thumbs_json TEXT")
     conn.execute("DELETE FROM channel_candidates WHERE listing_id=? AND status='candidate'", (lid,))
     now = datetime.now(timezone.utc).isoformat()
     for c, s in scored:
+        thumbs = _video_thumbs(key, c["id"])                       # 各候補の直近動画サムネ
         conn.execute("""INSERT OR REPLACE INTO channel_candidates
             (listing_id, channel_id, channel_title, subs, videos, published,
-             confidence, breakdown_json, fetched_at, status)
-            VALUES (?,?,?,?,?,?,?,?,?, 'candidate')""",
+             confidence, breakdown_json, fetched_at, status, thumbs_json)
+            VALUES (?,?,?,?,?,?,?,?,?, 'candidate', ?)""",
             (lid, c["id"], c["title"], c["subs"], c["videos"], c["published"],
-             s["confidence"], json.dumps(s["parts"], ensure_ascii=False), now))
+             s["confidence"], json.dumps(s["parts"], ensure_ascii=False), now,
+             json.dumps(thumbs, ensure_ascii=False)))
     conn.commit()
 
 
@@ -255,7 +283,7 @@ def run(lid: str, n: int = 5, benchmark: bool = False, regen: bool = True) -> in
     cands = _yt_channels(key, ids)
     scored = sorted(((c, _score(listing, c)) for c in cands),
                     key=lambda cs: -cs[1]["confidence"])[:n]
-    _save(conn, lid, scored)
+    _save(conn, lid, scored, key)
 
     print(f"\n  候補 上位{len(scored)}（近似順・信頼度は弱い指紋の合成。最終判断は人間）:")
     for i, (c, s) in enumerate(scored, 1):
@@ -290,17 +318,17 @@ def run(lid: str, n: int = 5, benchmark: bool = False, regen: bool = True) -> in
 
 
 def batch(limit: int = 19) -> int:
-    """厳選相当（募集中×買い/様子見×適合≥4×総合≥2.5）の未検索案件を一括候補検索。
+    """募集中×買い/様子見×適合≥4 の未検索案件を一括候補検索（サムネ視覚スキャン用に母数を広げる）。
     掘り下げ(--benchmark)はしない＝母数集め。quota上限で安全中断（再実行で続きから）。"""
     conn = storage.init()
     searched = {r[0] for r in conn.execute("SELECT DISTINCT listing_id FROM channel_candidates")}
     rows = conn.execute("""
         SELECT l.id FROM listings l JOIN evaluations e ON e.listing_id=l.id
         WHERE l.status_state='募集中' AND e.verdict IN ('買い','様子見')
-          AND e.capability_fit>=4 AND e.overall_score>=2.5
+          AND e.capability_fit>=4
         ORDER BY e.overall_score DESC""").fetchall()
     targets = [str(r[0]) for r in rows if str(r[0]) not in searched][:limit]
-    print(f"=== 一括候補検索（厳選相当×未検索）対象 {len(targets)} 件 / 上限{limit} ===")
+    print(f"=== 一括候補検索（買い/様子見×適合≥4×未検索）対象 {len(targets)} 件 / 上限{limit} ===")
     done = 0
     for i, lid in enumerate(targets, 1):
         print(f"\n──────── [{i}/{len(targets)}] 案件 {lid} ────────")
