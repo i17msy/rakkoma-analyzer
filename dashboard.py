@@ -30,12 +30,12 @@ def _load_youtube(conn):
     cands, bench = {}, {}
     try:
         for r in conn.execute(
-            "SELECT listing_id, channel_id, channel_title, subs, videos, published, confidence, thumbs_json "
+            "SELECT listing_id, channel_id, channel_title, subs, videos, published, confidence, thumbs_json, fetched_at "
             "FROM channel_candidates WHERE status='candidate' ORDER BY confidence DESC"):
             cands.setdefault(r[0], []).append({
                 "channel_id": r[1], "title": r[2], "subs": r[3],
                 "videos": r[4], "published": r[5], "confidence": r[6],
-                "thumbs": json.loads(r[7]) if r[7] else []})
+                "thumbs": json.loads(r[7]) if r[7] else [], "fetched_at": r[8]})
     except sqlite3.OperationalError:
         pass
     try:
@@ -146,11 +146,12 @@ HTML = r"""<!DOCTYPE html>
   .detail h4.hStr { color:var(--good); } .detail h4.hWeak { color:var(--mid); }
   .ytsec { background:#0a1119; border:1px solid #25405a; border-left:3px solid #c4302b;
            border-radius:8px; padding:11px 14px 13px; margin-top:6px; }
-  .ytsec h4 { color:#ff7a6b; margin:0 0 10px; font-size:19px; }
+  .ytsec h4 { color:#ff7a6b; margin:0 0 11px; font-size:22px; }
   .ytc { padding:9px 2px; border-top:1px solid #1b2937; line-height:1.65; font-size:15px; }
   .ytc:first-of-type { border-top:none; }
-  .ytcline { font-size:18px; }
-  .ytcline > b { display:inline-block; min-width:52px; font-size:19px; }
+  .ytcline { font-size:19px; }
+  .ytcline > b { display:inline-block; min-width:56px; font-size:23px; font-weight:700; }
+  .ytage { font-size:13px; }
   .ytcline a { color:#6db3f2; margin:0 9px; text-decoration:none; } .ytcline a:hover { text-decoration:underline; }
   .ytstrip { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 2px; }
   .ytth { height:80px; width:auto; border-radius:4px; border:1px solid #1c2a3a; display:block; }
@@ -346,10 +347,13 @@ function ytSection(cands){
   const items=cands.map(c=>{
     const subs=(c.subs==null)?'非公開':Number(c.subs).toLocaleString();
     const thumbs=(c.thumbs||[]).map(u=>`<img class="ytth" loading="lazy" src="${esc(u)}">`).join('');
+    let age='';
+    if(c.fetched_at){ const d=Math.floor((Date.now()-new Date(c.fetched_at).getTime())/86400000);
+      age=` <span class="mut ytage">· 📷${d<=0?'今日取得':d+'日前取得'}</span>`; }
     return `<div class="ytc"><div class="ytcline">`
       +`<b class="${ytConf(c.confidence)}">${Math.round(c.confidence*100)}%</b>`
       +`<a href="https://www.youtube.com/channel/${c.channel_id}" target="_blank" rel="noopener">${esc(c.title)}</a>`
-      +`<span class="mut">登録${subs} / 投稿${c.videos} / 開設${c.published||'-'}</span></div>`
+      +`<span class="mut">登録${subs} / 投稿${c.videos} / 開設${c.published||'-'}</span>${age}</div>`
       +(thumbs?`<div class="ytstrip">${thumbs}</div>`:'')+`</div>`;
   }).join('');
   return `<div class="full ytsec"><h4>🎥 YouTube候補（近似順・サムネで設計を見る）</h4>${items}</div>`;
