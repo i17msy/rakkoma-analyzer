@@ -6,7 +6,7 @@ FROM python:3.12-slim
 ENV TZ=Asia/Tokyo \
     PYTHONUNBUFFERED=1
 
-RUN pip install --no-cache-dir requests anthropic
+RUN pip install --no-cache-dir requests anthropic boto3
 
 WORKDIR /root/rakkoma
 

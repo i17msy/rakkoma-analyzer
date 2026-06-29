@@ -30,6 +30,7 @@ from config import (
     SOLD_MARKER, WITHDRAWN_MARKER, DEAL_DAYS_RE,
     NOTIFY_MIN_FIT, NOTIFY_MIN_OVERALL, NOTIFY_VERDICTS,
     IDLE_HOSTS_FILE,
+    BACKUPS_DIR, HEARTBEAT_STALE_MULT,
 )
 import storage
 import metrics
@@ -340,6 +341,36 @@ def check_once(dry_run: bool = False) -> int:
             log.error(f"ダッシュボード再生成失敗: {e}")
     return notified
 
+# ── 死活監視ハートビート＋DBバックアップ（R2/ローカル）──────────────────────
+
+def _pulse(notified=None) -> None:
+    """毎ポーリング: R2へ生死信号（heartbeat）を打ち、日次でDBをバックアップする。
+    R2未設定でもローカル日次バックアップは動く。失敗しても監視本体は止めない。"""
+    try:
+        import r2
+        conn = storage.init()
+        n_l = conn.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
+        n_e = conn.execute(
+            "SELECT COUNT(*) FROM evaluations WHERE overall_score IS NOT NULL").fetchone()[0]
+        now = datetime.now(JST)
+        stats = {
+            "service": "rakkoma-observer",
+            "host": socket.gethostname(),
+            "ts": now.isoformat(),
+            "interval_sec": POLL_INTERVAL_SEC,
+            "stale_after_sec": POLL_INTERVAL_SEC * HEARTBEAT_STALE_MULT,
+            "listings": n_l,
+            "evaluated": n_e,
+            "last_poll_notified": notified,
+        }
+        hb = r2.put_heartbeat(stats)
+        bk = r2.daily_backup(storage.DB_FILE, BACKUPS_DIR, now.strftime("%Y%m%d"))
+        log.info(f"pulse: heartbeat={'OK' if hb else 'skip'} "
+                 f"backup(local={bk['local']}, r2={bk['r2']})")
+    except Exception as e:
+        log.warning(f"pulse失敗（監視/バックアップ・本体継続）: {e}")
+
+
 # ── アイドル判定（重複ポーリング防止）─────────────────────────────────────────
 
 def _is_idle_host() -> bool:
@@ -383,6 +414,7 @@ def main() -> None:
     if args.once:
         n = check_once(dry_run=args.dry_run)
         log.info(f"チェック完了: 通知={n}件")
+        _pulse(notified=n)
         return
 
     # 重複ポーリング防止: このコンテナがアイドル指定なら監視せず待機（コンテナは生かす）
@@ -397,11 +429,13 @@ def main() -> None:
 
     while True:
         t_start = _time.time()
+        n = None
         try:
             n = check_once(dry_run=args.dry_run)
             log.info(f"ポーリング完了: 通知={n}件")
         except Exception as e:
             log.error(f"予期しないエラー: {e}", exc_info=True)
+        _pulse(notified=n)   # 生死信号＋日次バックアップ（毎ポーリング・新着0でも打つ）
         elapsed = _time.time() - t_start
         wait = max(0.0, POLL_INTERVAL_SEC - elapsed)
         log.info(f"{int(wait)}秒待機...")

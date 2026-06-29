@@ -26,6 +26,7 @@ fi
 source ~/.bashrc 2>/dev/null || true
 [ -z "${ANTHROPIC_API_KEY:-}" ]         && echo "[WARN] ANTHROPIC_API_KEY 未設定 → 評価・通知は行わずDB保存のみ"
 [ -z "${SLACK_WEBHOOK_URL_RAKKOMA:-}" ] && echo "[WARN] SLACK_WEBHOOK_URL_RAKKOMA 未設定 → 通知は出ない"
+[ -z "${R2_ACCESS_KEY_ID:-}" ]          && echo "[WARN] R2_* 未設定 → クラウド死活監視/R2バックアップなし（ローカル日次バックアップのみ）"
 
 docker run -d \
     --name "$CONTAINER_NAME" \
@@ -33,6 +34,10 @@ docker run -d \
     --init \
     -e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}" \
     -e "SLACK_WEBHOOK_URL_RAKKOMA=${SLACK_WEBHOOK_URL_RAKKOMA:-}" \
+    -e "R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}" \
+    -e "R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}" \
+    -e "R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}" \
+    -e "R2_BUCKET=${R2_BUCKET:-}" \
     -v "${HOST_DIR}:/root/rakkoma" \
     "$IMAGE"
 
