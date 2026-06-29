@@ -132,25 +132,112 @@ def _gemini_formula(gkey: str, vid: str, secs: int = 240) -> dict:
         return {"raw": txt}
 
 
+# ── Sonnet 再解釈インサイト（ラッコ↔YouTube実データ・両方ファクト）───────────
+
+_INSIGHT_SYSTEM = """あなたはYouTubeチャンネルM&Aのデューデリ専門家。ラッコ出品(売り手申告)と特定済みのYouTube実データを分析する。
+【最重要の前提】
+- ラッコ申告(収益/登録者/投稿等)も YouTube実データも、すべて等しく"ファクト"として扱う。
+- **申告が虚偽・誇張だ という推論は禁止**。一見の矛盾は「両方が事実として両立する自然なメカニズム」で説明せよ。
+  典型: 直近の新規動画の再生が低くても収益が維持されているなら、それは"旧運営者が作った動画資産のロングテール再生が収益を支えている"構造（嘘ではない）。
+  開始時期の申告と実開設日のズレも、出品者の運用開始日と実開設日の差として自然に説明する（隠蔽と決めつけない）。
+- すべてを事実とした上でのみ導ける、買い手に有益な推論だけを出す。各pointは1〜2文で簡潔に。"""
+
+_INSIGHT_TOOL = {
+    "name": "submit_insight",
+    "description": "買い手向け再解釈インサイト",
+    "input_schema": {"type": "object", "properties": {
+        "headline": {"type": "string", "description": "案件の本質を一文で"},
+        "sections": {"type": "array", "items": {"type": "object", "properties": {
+            "title": {"type": "string"}, "points": {"type": "array", "items": {"type": "string"}}},
+            "required": ["title", "points"]},
+            "description": "4観点: 実データが語る構造/運営者交代とノウハウ継承/収益の持続性(資産ロングテールvs新規制作力)/買い手の判断材料"},
+        "verdict": {"type": "string", "description": "買い手への結論を2〜3文で"}},
+        "required": ["headline", "sections", "verdict"]}}
+
+
+def _channel_stats(key, cid) -> str:
+    """現在の登録者数（非公開なら'非公開'）。"""
+    try:
+        r = requests.get(f"{YT}/channels", params={"key": key, "part": "statistics", "id": cid}, timeout=20).json()
+        s = r["items"][0]["statistics"]
+        if s.get("hiddenSubscriberCount"):
+            return "非公開"
+        return f"{int(s.get('subscriberCount', 0)):,}"
+    except Exception:
+        return "?"
+
+
+def _sonnet_insight(listing_id, ykey, cid, vids, win, cliff):
+    """ラッコ申告とYouTube実データ（両方ファクト）から買い手向け再解釈レポートを生成。"""
+    akey = os.environ.get("ANTHROPIC_API_KEY")
+    if not akey:
+        print("[warn] ANTHROPIC_API_KEY 未設定 → インサイト生成スキップ", file=sys.stderr)
+        return None
+    import sqlite3
+    import storage
+    import anthropic
+    conn = storage.init()
+    conn.row_factory = sqlite3.Row
+    L = conn.execute("SELECT * FROM listings WHERE id=?", (listing_id,)).fetchone()
+    if not L:
+        return None
+    rakkoma = (f"案件名: {L['title']} / 希望価格: {L['price_str']}\n"
+               f"登録者(申告): {L['followers']} / 投稿(申告): {L['post_count']} / 運営開始(申告): {L['start_date']}\n"
+               f"月次利益(申告): 直近{L['profit_recent']} / 平均{L['profit_avg']} / 最高{L['profit_max']} / 収益モデル: {L['biz_model']}\n"
+               f"説明: {(L['description'] or '')[:500]}")
+    subs = _channel_stats(ykey, cid)
+    bym = collections.defaultdict(list)
+    for v in vids:
+        bym[v['date'][:7]].append(v['views'])
+    traj = " / ".join(f"{m}:{int(statistics.median(bym[m])):,}" for m in sorted(bym))
+    last3 = sorted(bym)[-3:]
+    rec = [x for m in last3 for x in bym[m]]
+    rec_med = int(statistics.median(rec)) if rec else None
+    yt = (f"開設(実): {vids[0]['date'] if vids else '?'} / 現登録者(実): {subs} / 総動画(実): {len(vids)}\n"
+          f"月別中央再生の推移(実): {traj}\n"
+          f"勝ち筋era: {win[0]['date'] if win else '?'}〜{win[-1]['date'] if win else '?'} {len(win)}本"
+          f"（崖={cliff}） / 直近中央再生(実): {rec_med}")
+    try:
+        cli = anthropic.Anthropic(api_key=akey)
+        r = cli.messages.create(
+            model="claude-sonnet-4-6", max_tokens=2800,
+            system=_INSIGHT_SYSTEM, tools=[_INSIGHT_TOOL],
+            tool_choice={"type": "tool", "name": "submit_insight"},
+            messages=[{"role": "user", "content":
+                f"【ラッコ出品(申告=事実)】\n{rakkoma}\n\n【YouTube実データ(特定済み=事実)】\n{yt}"}])
+        return next(b.input for b in r.content if b.type == "tool_use")
+    except Exception as e:
+        print(f"[warn] Sonnetインサイト生成失敗: {e}", file=sys.stderr)
+        return None
+
+
 # ── メイン ────────────────────────────────────────────────────────────────────
 
-def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula):
+def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula, insight=None):
     """ダッシュボード表示用に channel_benchmark テーブルへ保存（channel_id 主キー）。"""
     import storage
     conn = storage.init()
     conn.execute("""CREATE TABLE IF NOT EXISTS channel_benchmark(
         channel_id TEXT PRIMARY KEY, listing_id TEXT,
         win_start TEXT, win_end TEXT, win_count INTEGER, cliff TEXT,
-        monthly_json TEXT, top_videos_json TEXT, formula_json TEXT, fetched_at TEXT)""")
+        monthly_json TEXT, top_videos_json TEXT, formula_json TEXT, fetched_at TEXT,
+        insight_json TEXT)""")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(channel_benchmark)")}
+    if "insight_json" not in cols:                                   # 既存テーブルへの追加
+        conn.execute("ALTER TABLE channel_benchmark ADD COLUMN insight_json TEXT")
     tv = [{"id": v["id"], "date": v["date"], "views": v["views"], "title": v["title"]} for v in topv]
-    conn.execute("INSERT OR REPLACE INTO channel_benchmark VALUES (?,?,?,?,?,?,?,?,?,?)", (
+    conn.execute("""INSERT OR REPLACE INTO channel_benchmark
+        (channel_id, listing_id, win_start, win_end, win_count, cliff,
+         monthly_json, top_videos_json, formula_json, fetched_at, insight_json)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)""", (
         cid, listing_id,
         win[0]["date"] if win else None, win[-1]["date"] if win else None,
         len(win), cliff,
         json.dumps(monthly, ensure_ascii=False),
         json.dumps(tv, ensure_ascii=False),
         json.dumps(formula, ensure_ascii=False) if formula is not None else None,
-        datetime.now(timezone.utc).isoformat()))
+        datetime.now(timezone.utc).isoformat(),
+        json.dumps(insight, ensure_ascii=False) if insight is not None else None))
     conn.commit()
 
 
@@ -179,18 +266,24 @@ def run(ch: str, top: int = 3, listing_id: str | None = None) -> int:
     for v in topv:
         print(f"  {v['views']:>9,} | {v['date']} | {v['title'][:40]}  ({v['id']})")
 
-    formula = None
-    gkey = _key("GOOGLE_API_KEY")
-    if gkey and topv:
-        best = topv[0]
-        print(f"\n--- Gemini formula抽出（勝ち筋トップ {best['id']} / {best['views']:,}回・冒頭240秒）---")
-        formula = _gemini_formula(gkey, best["id"])
-        print(json.dumps(formula, ensure_ascii=False, indent=2))
-    elif not gkey:
-        print("\nGOOGLE_API_KEY 未設定 → formula抽出スキップ（再生数分析のみ・ダッシュには勝ち筋eraを保存）")
+    # 掘り下げ＝Sonnet 再解釈インサイト（ラッコ↔YouTube実データを両方ファクトとして再解釈）
+    # ※Gemini動画formula抽出は将来の「本気でレシピ化」段階のオプションに格下げ（今は呼ばない）
+    insight = None
+    if listing_id:
+        print(f"\n--- Sonnet 再解釈インサイト（ラッコ申告 × YouTube実データ・両方ファクト）---")
+        insight = _sonnet_insight(listing_id, ykey, cid, vids, win, cliff)
+        if insight:
+            print("◆", insight.get("headline", ""))
+            for s in insight.get("sections", []):
+                print(f"\n■ {s.get('title', '')}")
+                for p in s.get("points", []):
+                    print(f"  ・{p}")
+            print("\n◆ VERDICT:", insight.get("verdict", ""))
+    else:
+        print("\n（listing_id 未指定 → 再解釈インサイトはスキップ・勝ち筋eraのみ保存）")
 
     try:
-        _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula)
+        _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula=None, insight=insight)
     except Exception as e:
         print(f"[warn] ベンチマーク保存失敗: {e}", file=sys.stderr)
     return 0

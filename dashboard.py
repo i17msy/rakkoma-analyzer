@@ -38,13 +38,15 @@ def _load_youtube(conn):
     except sqlite3.OperationalError:
         pass
     try:
-        for r in conn.execute(
-            "SELECT channel_id, win_start, win_end, win_count, cliff, top_videos_json, formula_json "
-            "FROM channel_benchmark"):
-            bench[r[0]] = {
-                "win_start": r[1], "win_end": r[2], "win_count": r[3], "cliff": r[4],
-                "top_videos": json.loads(r[5] or "[]"),
-                "formula": json.loads(r[6]) if r[6] else None}
+        cur = conn.execute("SELECT * FROM channel_benchmark")  # column-name方式（insight_json有無に頑健）
+        names = [d[0] for d in cur.description]
+        for row in cur.fetchall():
+            d = dict(zip(names, row))
+            bench[d["channel_id"]] = {
+                "win_start": d.get("win_start"), "win_end": d.get("win_end"),
+                "win_count": d.get("win_count"), "cliff": d.get("cliff"),
+                "top_videos": json.loads(d.get("top_videos_json") or "[]"),
+                "insight": json.loads(d["insight_json"]) if d.get("insight_json") else None}
     except sqlite3.OperationalError:
         pass
     return cands, bench
@@ -147,8 +149,16 @@ HTML = r"""<!DOCTYPE html>
   .ytc:first-of-type { border-top:none; }
   .ytc > b { display:inline-block; min-width:46px; }
   .ytc a { color:#6db3f2; margin:0 8px; text-decoration:none; } .ytc a:hover { text-decoration:underline; }
-  .ytb { margin:5px 0 2px 54px; font-size:14px; color:#a9c2dc;
+  .ytb { margin:5px 0 4px 54px; font-size:14px; color:#a9c2dc;
          background:#0e1a26; border-radius:6px; padding:7px 10px; }
+  .insight { margin:6px 0 2px 54px; font-size:14px; line-height:1.62; }
+  .inhead { color:#ffd27a; font-weight:700; font-size:15px; margin:2px 0 9px;
+            padding:8px 11px; background:#12202c; border-radius:6px; border-left:3px solid #ffb347; }
+  .insec { margin:0 0 9px; }
+  .institle { color:#7fd1c0; font-weight:700; margin:0 0 3px; font-size:14px; }
+  .insight ul { margin:0; padding-left:18px; } .insight li { margin:3px 0; color:#cdd9e5; }
+  .inverdict { background:#1b1408; border-left:3px solid #ffb347; border-radius:6px;
+               padding:9px 12px; margin-top:4px; color:#ecdcc0; }
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
@@ -300,16 +310,19 @@ function cell(c,r){
 function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 
 function ytConf(v){ return v>=0.7?'s-hi':v>=0.5?'s-mid':'s-lo'; }
+function insightReport(ins){
+  if(!ins) return '';
+  const secs=(ins.sections||[]).map(s=>
+    `<div class="insec"><div class="institle">${esc(s.title)}</div><ul>${(s.points||[]).map(p=>`<li>${esc(p)}</li>`).join('')}</ul></div>`).join('');
+  return `<div class="insight"><div class="inhead">📋 ${esc(ins.headline||'')}</div>${secs}`
+    +(ins.verdict?`<div class="inverdict"><b>総評</b> ${esc(ins.verdict)}</div>`:'')+`</div>`;
+}
 function ytSection(cands){
   const items=cands.map(c=>{
     const b=c.benchmark; let bench='';
     if(b){
-      const f=b.formula||{}; let hook='';
-      if(f.hook_type){ hook=(f.hook_type.type||'')+(f.hook_type.text?`「${f.hook_type.text}」`:''); }
-      const summ=Array.isArray(f.formula_summary)?f.formula_summary.join(' '):(f.formula_summary||'');
-      bench=`<div class="ytb">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）`
-          +(hook?` ・ hook: ${esc(hook)}`:'')
-          +(summ?`<div class="mut" style="margin-top:3px;line-height:1.5">${esc(summ)}</div>`:'')+`</div>`;
+      bench=`<div class="ytb">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）</div>`
+          + insightReport(b.insight);
     }
     const subs=(c.subs==null)?'非公開':Number(c.subs).toLocaleString();
     return `<div class="ytc"><b class="${ytConf(c.confidence)}">${Math.round(c.confidence*100)}%</b>`
