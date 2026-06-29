@@ -198,7 +198,7 @@ HTML = r"""<!DOCTYPE html>
   </select>
   <select id="sf" onchange="render()">
     <option value="">状態: すべて</option>
-    <option value="募集中">募集中</option>
+    <option value="募集中" selected>募集中</option>
     <option value="__closed">クローズ</option>
     <option value="成約済み">成約済み</option>
     <option value="受付終了">受付終了</option>
