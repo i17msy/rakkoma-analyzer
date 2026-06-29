@@ -138,7 +138,7 @@ HTML = r"""<!DOCTYPE html>
   .bar { font-size:16px; } .bar b { color:var(--fg); }
   .dtitle { color:var(--accent); font-size:24px; font-weight:600; text-decoration:none; }
   .dtitle:hover { text-decoration:underline; }
-  .dtitlebar { position:sticky; top:30px; z-index:6; background:#0d121b;
+  .dtitlebar { position:sticky; top:33px; z-index:6; background:#0d121b;
                padding:8px 0 9px; margin:-2px 0 3px; border-bottom:1px solid var(--line); }
   .bars.scores { gap:22px; padding-bottom:6px; border-bottom:1px solid var(--line); }
   .scores .bar { font-size:18px; } .scores b { font-size:23px; font-weight:700; }
