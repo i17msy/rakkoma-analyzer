@@ -161,7 +161,7 @@ HTML = r"""<!DOCTYPE html>
   .ytc:first-of-type { border-top:none; }
   .ytcline { font-size:19px; }
   .ytcline > b { display:inline-block; min-width:56px; font-size:23px; font-weight:700; }
-  .ytage { font-size:17px; }
+  .ytage { font-size:19px; }
   .ytcline a { color:#6db3f2; margin:0 9px; text-decoration:none; } .ytcline a:hover { text-decoration:underline; }
   .ytstrip { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 2px; }
   .ytth { height:80px; width:auto; border-radius:4px; border:1px solid #1c2a3a; display:block; }
