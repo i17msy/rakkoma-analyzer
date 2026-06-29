@@ -196,8 +196,8 @@ Cloudflare R2（S3互換・**エグレス無料**）を専用バケット `rakko
   クラウド側（別Claude等）が読み、`now - ts > stale_after_sec`（=interval×3≒90分）なら**死亡判定**。新着0でも必ず打つ。
 - **DBバックアップ**: 1日1回、稼働中でも整合する SQLite online backup でローカル `data/backups/rakkoma-YYYYMMDD.db` を作り、
   R2 `backups/` へ未アップなら上げる。ローカル/R2 とも直近 `BACKUP_RETENTION`(14)日分のみ保持。
-- 認証は env。**ホスト側は `R2_RAKKOMA_*`（MLB等と名前空間を分離）→ run_container がコンテナ内の汎用
-  `R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`R2_BUCKET` に変換**。**未設定なら全て no-op**
+- 認証は env。**account/key/secret はMLBと共通の汎用 `R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`**、
+  **バケットだけ `R2_RAKKOMA_BUCKET`（ホスト）→ コンテナ内 `R2_BUCKET` に変換**して分離。**未設定なら全て no-op**
   （ただしローカル日次バックアップだけは動く）。依存は boto3（Dockerfileに追加・要再ビルド）。
 - 保護階層: **論理事故**=ローカル/R2両方が守る。**WSL/ディスク障害**=R2（オフディスク）が本命。
   さらに堅くするならR2を**月次でクラウド間コピー**や、ホストから `/mnt/c` への週次コピーも可。
