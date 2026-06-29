@@ -356,6 +356,10 @@ def _pulse(notified=None) -> None:
         stats = {
             "service": "rakkoma-observer",
             "host": socket.gethostname(),
+            # MLBの cloud routine と互換: last_poll(epoch)で elapsed 判定できる
+            "last_poll": int(now.timestamp()),
+            "last_poll_jst": now.strftime("%Y-%m-%d %H:%M:%S"),
+            # 自己記述（routineがしきい値をハードコードせず読めるよう同梱）
             "ts": now.isoformat(),
             "interval_sec": POLL_INTERVAL_SEC,
             "stale_after_sec": POLL_INTERVAL_SEC * HEARTBEAT_STALE_MULT,
