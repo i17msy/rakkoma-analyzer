@@ -8,7 +8,7 @@ set -euo pipefail
 
 HOST_DIR="/home/masaya/rakkoma"     # ホスト側のリポジトリ（コンテナ /root/rakkoma にマウント）
 IMAGE="rakkoma:latest"
-CONTAINER_NAME="rakkoma_watcher"
+CONTAINER_NAME="rakkoma_observer"   # 旧 watcher(=このClaudeセッションが居るコンテナ)を壊さないよう別名で起動
 
 # 専用イメージが無ければビルド（slim・requests+anthropicのみ）
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then

@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """ラッコM&A 新着YouTubeチャンネル案件 自動監視デーモン。
 
-Tier 1（即時通知）: YouTubeカテゴリ + 月次利益 ≥ TIER1_MIN_PROFIT
-Tier 2（研究候補）: YouTubeカテゴリ + 再現性キーワード該当 → DB蓄積のみ
+新着を SQLite(data/rakkoma.db) に一元化し、動画系は LLM 評価。
+買い/様子見 × 適合≥NOTIFY_MIN_FIT × 総合≥NOTIFY_MIN_OVERALL の厳選のみ Slack 通知。
+複数コンテナ共存時は idle_hosts.txt / 環境変数 RAKKOMA_IDLE で重複ポーリングを防ぐ。
 
-ログ: /root/rakkoma/rakkoma.log
-データ: /root/rakkoma/data/seen_listings.json, data/listings/{id}.json
+ログ: /root/rakkoma/rakkoma.log   データ: /root/rakkoma/data/rakkoma.db
 """
 
 import json
 import logging
 import os
+import socket
 import sys
 import time as _time
 import xml.etree.ElementTree as ET
@@ -28,6 +29,7 @@ from config import (
     YOUTUBE_TITLE_KEYWORDS, ADSENSE_KEYWORDS,
     SOLD_MARKER, WITHDRAWN_MARKER, DEAL_DAYS_RE,
     NOTIFY_MIN_FIT, NOTIFY_MIN_OVERALL, NOTIFY_VERDICTS,
+    IDLE_HOSTS_FILE,
 )
 import storage
 import metrics
@@ -338,6 +340,32 @@ def check_once(dry_run: bool = False) -> int:
             log.error(f"ダッシュボード再生成失敗: {e}")
     return notified
 
+# ── アイドル判定（重複ポーリング防止）─────────────────────────────────────────
+
+def _is_idle_host() -> bool:
+    """このコンテナを「監視させない（アイドル）」対象として扱うか判定する。
+
+    複数コンテナ（例: 旧 watcher と新 observer）が同じリポジトリをマウントして
+    共存する際、両方がポーリングすると seen 競合・二重通知・二重リクエストになる。
+    そこで daemon は起動時に自分の素性を確認し、下記いずれかに該当すれば監視しない:
+      1) 環境変数 RAKKOMA_IDLE が真         … 将来コンテナを作成時に -e で指定する用
+      2) 自分のホスト名(=コンテナ短縮ID)が IDLE_HOSTS_FILE に記載 … 既存コンテナ向け
+    restart でコードが再読込されても自分でアイドル化するので、凍結が永続化する。
+    """
+    if os.environ.get("RAKKOMA_IDLE", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    try:
+        host = socket.gethostname().strip()
+        if IDLE_HOSTS_FILE.exists():
+            for line in IDLE_HOSTS_FILE.read_text(encoding="utf-8").splitlines():
+                e = line.strip()
+                if e and not e.startswith("#") and e == host:
+                    return True
+    except Exception as e:
+        log.warning(f"アイドル判定エラー（無視して通常稼働）: {e}")
+    return False
+
+
 # ── デーモンループ ─────────────────────────────────────────────────────────────
 
 import argparse
@@ -356,6 +384,16 @@ def main() -> None:
         n = check_once(dry_run=args.dry_run)
         log.info(f"チェック完了: 通知={n}件")
         return
+
+    # 重複ポーリング防止: このコンテナがアイドル指定なら監視せず待機（コンテナは生かす）
+    if _is_idle_host():
+        host = socket.gethostname()
+        log.info(f"[IDLE] このコンテナ（{host}）は idle 指定 → 監視せず待機（監視は別コンテナが担当）")
+        try:
+            while True:
+                _time.sleep(3600)
+        except KeyboardInterrupt:
+            return
 
     while True:
         t_start = _time.time()

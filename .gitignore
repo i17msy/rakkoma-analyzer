@@ -5,3 +5,4 @@ data/seen_listings.json
 data/dashboard.html
 data/enum_targets.json
 data/rakkoma.db
+data/idle_hosts.txt
