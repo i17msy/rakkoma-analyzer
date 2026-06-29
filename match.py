@@ -104,11 +104,17 @@ def _gen_queries(listing: dict) -> list[str]:
 
 # ── YouTube Data API（read-only・APIキー）─────────────────────────────────────
 
+class _QuotaExceeded(Exception):
+    """YouTube Data API のクォータ上限。バッチはこれを捕えて安全に中断する。"""
+
+
 def _yt_search(key: str, q: str, n: int = 50) -> list[str]:
     r = requests.get(f"{YT}/search", params={
         "key": key, "part": "snippet", "type": "channel", "q": q,
         "maxResults": min(n, 50), "regionCode": "JP", "relevanceLanguage": "ja",
     }, timeout=20)
+    if r.status_code == 403 and "quota" in r.text.lower():
+        raise _QuotaExceeded(q)
     r.raise_for_status()
     return [it["id"]["channelId"] for it in r.json().get("items", [])
             if it.get("id", {}).get("channelId")]
@@ -216,7 +222,7 @@ def _save(conn, lid, scored):
 
 # ── メイン ────────────────────────────────────────────────────────────────────
 
-def run(lid: str, n: int = 5, benchmark: bool = False) -> int:
+def run(lid: str, n: int = 5, benchmark: bool = False, regen: bool = True) -> int:
     key = _api_key()
     if not key:
         print("YT_API_KEY 未設定（env か data/yt_api_key）。READMEの手順でAPIキーを用意してください。")
@@ -237,6 +243,8 @@ def run(lid: str, n: int = 5, benchmark: bool = False) -> int:
     for q in queries:
         try:
             ids += _yt_search(key, q)
+        except _QuotaExceeded:
+            raise                                        # バッチで安全中断するため握りつぶさない
         except Exception as e:
             print(f"[warn] 検索失敗 '{q}': {e}", file=sys.stderr)
     ids = list(dict.fromkeys(ids))                       # 重複除去・順序維持
@@ -270,23 +278,62 @@ def run(lid: str, n: int = 5, benchmark: bool = False) -> int:
         analyze_channel.run(top["id"], top=3, listing_id=lid)
 
     # 候補保存後にダッシュボードを再生成（照合→即ダッシュ反映＝一気通貫）
+    # ※バッチ時は regen=False（最後に1回だけまとめて再生成する）
+    if regen:
+        try:
+            import dashboard
+            print()
+            dashboard.main()
+        except Exception as e:
+            print(f"[warn] ダッシュ再生成失敗: {e}", file=sys.stderr)
+    return 0
+
+
+def batch(limit: int = 19) -> int:
+    """厳選相当（募集中×買い/様子見×適合≥4×総合≥2.5）の未検索案件を一括候補検索。
+    掘り下げ(--benchmark)はしない＝母数集め。quota上限で安全中断（再実行で続きから）。"""
+    conn = storage.init()
+    searched = {r[0] for r in conn.execute("SELECT DISTINCT listing_id FROM channel_candidates")}
+    rows = conn.execute("""
+        SELECT l.id FROM listings l JOIN evaluations e ON e.listing_id=l.id
+        WHERE l.status_state='募集中' AND e.verdict IN ('買い','様子見')
+          AND e.capability_fit>=4 AND e.overall_score>=2.5
+        ORDER BY e.overall_score DESC""").fetchall()
+    targets = [str(r[0]) for r in rows if str(r[0]) not in searched][:limit]
+    print(f"=== 一括候補検索（厳選相当×未検索）対象 {len(targets)} 件 / 上限{limit} ===")
+    done = 0
+    for i, lid in enumerate(targets, 1):
+        print(f"\n──────── [{i}/{len(targets)}] 案件 {lid} ────────")
+        try:
+            run(lid, benchmark=False, regen=False)
+            done += 1
+        except _QuotaExceeded:
+            print(f"\n[STOP] YouTube quota 上限に到達。{done}件で中断（明日 --batch 再実行で続きから）", file=sys.stderr)
+            break
+        except Exception as e:
+            print(f"[warn] 案件{lid} 失敗: {e}", file=sys.stderr)
     try:
         import dashboard
-        print()
-        dashboard.main()
+        dashboard.main()                                  # 最後に1回だけ
     except Exception as e:
         print(f"[warn] ダッシュ再生成失敗: {e}", file=sys.stderr)
+    print(f"\n=== 完了: {done}/{len(targets)} 件 検索（残りは再実行で続行）===")
     return 0
 
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if "--batch" in sys.argv:
+        limit = 19
+        if "--limit" in sys.argv:
+            limit = int(sys.argv[sys.argv.index("--limit") + 1])
+        sys.exit(batch(limit))
     n = 5
     if "--n" in sys.argv:
         n = int(sys.argv[sys.argv.index("--n") + 1])
     benchmark = "--benchmark" in sys.argv
     if not args:
-        print("使い方: python3 match.py <案件ID> [--n 5] [--benchmark]")
+        print("使い方: python3 match.py <案件ID> [--n 5] [--benchmark]  /  python3 match.py --batch [--limit 19]")
         sys.exit(2)
     sys.exit(run(args[0], n, benchmark=benchmark))
 
