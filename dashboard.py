@@ -131,7 +131,7 @@ HTML = r"""<!DOCTYPE html>
                   padding:11px 13px; line-height:1.7; }
   .detail .note .pill { font-size:13px; padding:2px 9px; }
   .bars { display:flex; gap:16px; flex-wrap:wrap; align-items:baseline; }
-  .bar { font-size:13.5px; } .bar b { color:var(--fg); }
+  .bar { font-size:16px; } .bar b { color:var(--fg); }
   .dtitle { color:var(--accent); font-size:24px; font-weight:600; text-decoration:none; }
   .dtitle:hover { text-decoration:underline; }
   .bars.scores { gap:22px; padding-bottom:6px; border-bottom:1px solid var(--line); }
