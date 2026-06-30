@@ -676,7 +676,7 @@ function renderOverview(rows){
   let H='';
   // 1 構成
   H+=_ovSec('compose','構成',`${n}件 · 募${open}/成${sold}/終${ended}`,
-    _chart([{t:'募集',v:open,c:_COPEN},{t:'成約',v:sold,c:_CSOLD},{t:'受付終了',v:ended,c:_CEND}])
+    _chart([{t:'募集',v:open,c:_COPEN},{t:'成約',v:sold,c:_CSOLD},{t:'終了',v:ended,c:_CEND}])
    +_chart([{t:'買い',v:buy,c:_CBUY},{t:'様子見',v:watch,c:_CWATCH},{t:'見送り',v:pass,c:_CPASS},{t:'未評価',v:nev,c:_CNONE}])
    +_ovRow('状態',`募集 ${open} / 成約 ${sold} / 受付終了 ${ended}`)
    +_ovRow('判定',`<span class="ov-hi">買 ${buy}</span> · 様 ${watch} · 見 ${pass} · <span class="mut">未 ${nev}</span>`));
