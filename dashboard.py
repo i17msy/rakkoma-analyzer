@@ -599,6 +599,11 @@ function _pie(segs,donut){ const tot=segs.reduce((s,x)=>s+(x.v||0),0); if(!tot) 
 function _chart(segs,donut){ const tot=segs.reduce((s,x)=>s+(x.v||0),0); if(!tot) return '';
   const leg=segs.filter(x=>x.v>0).map(x=>`<div><i style="background:${x.c}"></i>${esc(x.t)} <b>${x.v}</b> <span class="k">${_pct(x.v,tot)}%</span></div>`).join('');
   return `<div class="ov-chart">${_pie(segs,donut)}<div class="ov-leg">${leg}</div></div>`; }
+// 強→弱の順序ランプ（隣接で色相を大きく離す）。緑=強・赤=弱
+const _RAMP5=['#27ae60','#9acd32','#f4d03f','#ef8b32','#db4a4a'];  // 5段(5→1)
+const _RAMP4=['#27ae60','#9acd32','#ef8b32','#db4a4a'];            // 4段(強→弱)
+const _CBUY='#27ae60', _CWATCH='#f4d03f', _CPASS='#8d98a6', _CNONE='#33404e';  // 判定
+const _COPEN='#3d8edd', _CSOLD='#27ae60', _CEND='#8d98a6', _CDARK='#22303f';   // 状態/未充填
 
 function renderOverview(rows){
   const el=document.getElementById('overview'); if(el.hidden) return;
@@ -612,8 +617,8 @@ function renderOverview(rows){
 
   // ① 構成
   H+=_ovSec('compose','構成',`${n}件 · 募${open}/成${sold}/終${ended}`,
-    _chart([{t:'募集',v:open,c:'#4a90d9'},{t:'成約',v:sold,c:'#7fd6a0'},{t:'受付終了',v:ended,c:'#8a93a0'}])
-   +_chart([{t:'買い',v:buy,c:'#7fd6a0'},{t:'様子見',v:watch,c:'#e2c04a'},{t:'見送り',v:pass,c:'#9aa6b2'},{t:'未評価',v:nev,c:'#34404e'}])
+    _chart([{t:'募集',v:open,c:_COPEN},{t:'成約',v:sold,c:_CSOLD},{t:'受付終了',v:ended,c:_CEND}])
+   +_chart([{t:'買い',v:buy,c:_CBUY},{t:'様子見',v:watch,c:_CWATCH},{t:'見送り',v:pass,c:_CPASS},{t:'未評価',v:nev,c:_CNONE}])
    +_ovRow('状態',`募集 ${open} / 成約 ${sold} / 受付終了 ${ended}`)
    +_ovRow('判定',`<span class="ov-hi">買 ${buy}</span> · 様 ${watch} · 見 ${pass} · <span class="mut">未 ${nev}</span>`));
 
@@ -622,7 +627,7 @@ function renderOverview(rows){
   const reach=fits.filter(v=>v>=4).length, fd=k=>fits.filter(v=>v===k).length;
   H+=_ovSec('fit','能力適合（作れる射程）',
     fits.length?`射程≥4: <span class="ov-hi">${reach}</span> (${_pct(reach,fits.length)}%)`:'評価なし',
-    fits.length?(_chart([{t:'適合5',v:fd(5),c:'#7fd6a0'},{t:'4',v:fd(4),c:'#a7d98a'},{t:'3',v:fd(3),c:'#e2c04a'},{t:'2',v:fd(2),c:'#e0975a'},{t:'1',v:fd(1),c:'#c75b5b'}])
+    fits.length?(_chart([{t:'適合5',v:fd(5),c:_RAMP5[0]},{t:'4',v:fd(4),c:_RAMP5[1]},{t:'3',v:fd(3),c:_RAMP5[2]},{t:'2',v:fd(2),c:_RAMP5[3]},{t:'1',v:fd(1),c:_RAMP5[4]}])
      +_ovRow('射程 ≥4（作れる）',`<span class="ov-hi">${reach}件 / 評価${fits.length}件 (${_pct(reach,fits.length)}%)</span>`,true)
      +_ovRow('適合 5 / 4',`${fd(5)} / ${fd(4)}`)
      +_ovRow('適合 3 / 2 / 1',`${fd(3)} / ${fd(2)} / ${fd(1)}`)):'<div class="ov-note">評価済みがありません。</div>');
@@ -635,7 +640,7 @@ function renderOverview(rows){
   const cmed=_med(confs);
   H+=_ovSec('yt','YouTube照合カバレッジ',
     `照合 ${yt.length}/${n} (${_pct(yt.length,n)}%)${cmed!=null?` · 一致中央 ${Math.round(cmed*100)}%`:''}`,
-    _chart([{t:'照合済',v:yt.length,c:'#6db3f2'},{t:'未照合',v:n-yt.length,c:'#22303f'}],true)
+    _chart([{t:'照合済',v:yt.length,c:'#6db3f2'},{t:'未照合',v:n-yt.length,c:_CDARK}],true)
    +_ovRow('照合済み',`<span class="ov-hi">${yt.length}件</span> / ${n}件 (${_pct(yt.length,n)}%)`,true)
    +_ovRow('一致率 中央値',cmed==null?'–':Math.round(cmed*100)+'%')
    +_ovRow('高一致 ≥80%',`${hi}件`)
@@ -668,7 +673,7 @@ function renderOverview(rows){
     const fpr=_med(fast.map(r=>r.profit).filter(v=>v!=null)), spr=_med(slow.map(r=>r.profit).filter(v=>v!=null));
     const toks=_toks(fast);
     spdT=`滞留中央 ${_med(dw)}日 · 即決${_pct(fast.length,sr.length)}%`;
-    spdB=_chart([{t:'≤7日',v:fast.length,c:'#7fd6a0'},{t:'8-30',v:w30.length-fast.length,c:'#a7d98a'},{t:'31-90',v:w90.length-w30.length,c:'#e2c04a'},{t:'>90',v:sr.length-w90.length,c:'#c75b5b'}])
+    spdB=_chart([{t:'≤7日',v:fast.length,c:_RAMP4[0]},{t:'8-30',v:w30.length-fast.length,c:_RAMP4[1]},{t:'31-90',v:w90.length-w30.length,c:_RAMP4[2]},{t:'>90',v:sr.length-w90.length,c:_RAMP4[3]}])
      +_ovRow('滞留 中央値',_med(dw)+'日',true)
      +_ovRow('即決 ≤7日',`<span class="ov-hi">${fast.length}件 (${_pct(fast.length,sr.length)}%)</span>`)
      +_ovRow('≤30日 / ≤90日',`${_pct(w30.length,sr.length)}% / ${_pct(w90.length,sr.length)}%`)
@@ -684,7 +689,7 @@ function renderOverview(rows){
   if(se.length){
     const sb=se.filter(r=>r.evaluation.verdict==='買い').length, sw=se.filter(r=>r.evaluation.verdict==='様子見').length, sp2=se.filter(r=>r.evaluation.verdict==='見送り').length;
     mT=`買い${_pct(sb,se.length)}%（成約${se.length}件）`;
-    mB=_chart([{t:'買い',v:sb,c:'#7fd6a0'},{t:'様子見',v:sw,c:'#e2c04a'},{t:'見送り',v:sp2,c:'#9aa6b2'}])
+    mB=_chart([{t:'買い',v:sb,c:_CBUY},{t:'様子見',v:sw,c:_CWATCH},{t:'見送り',v:sp2,c:_CPASS}])
      +_ovRow('買い',`<span class="ov-hi">${sb}件 (${_pct(sb,se.length)}%)</span>`)
      +_ovRow('様子見',`${sw}件 (${_pct(sw,se.length)}%)`)
      +_ovRow('見送り',`<span class="ov-lo">${sp2}件 (${_pct(sp2,se.length)}%)</span>`)
@@ -703,8 +708,8 @@ function renderOverview(rows){
   const series=rows.filter(r=>r.metrics&&r.metrics.monetized_months!=null).length;
   const ages=rows.map(r=>r.data_age_months).filter(v=>v!=null);
   H+=_ovSec('quality','データ品質・カバレッジ',`評価 ${_pct(ev.length,n)}% · 系列 ${_pct(series,n)}%`,
-    _chart([{t:'評価済',v:ev.length,c:'#7fd6a0'},{t:'未評価',v:n-ev.length,c:'#22303f'}],true)
-   +_chart([{t:'系列あり',v:series,c:'#6db3f2'},{t:'系列なし',v:n-series,c:'#22303f'}],true)
+    _chart([{t:'評価済',v:ev.length,c:_CSOLD},{t:'未評価',v:n-ev.length,c:_CDARK}],true)
+   +_chart([{t:'系列あり',v:series,c:'#6db3f2'},{t:'系列なし',v:n-series,c:_CDARK}],true)
    +_ovRow('評価済み',`${ev.length}件 / ${n}件 (${_pct(ev.length,n)}%)`,true)
    +_ovRow('収益系列あり',`${series}件 (${_pct(series,n)}%)`)
    +_ovRow('データ鮮度 中央値',ages.length?_med(ages)+'ヶ月前':'–')
