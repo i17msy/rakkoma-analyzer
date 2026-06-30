@@ -128,6 +128,7 @@ HTML = r"""<!DOCTYPE html>
   .genre { color:var(--mut); }
   .bmstar { cursor:pointer; color:#56657a; margin-right:8px; font-size:18px; user-select:none; }
   .bmstar:hover { color:#f4d03f; } .bmstar.on { color:#f4d03f; }
+  .dbmstar { font-size:26px; margin-right:11px; vertical-align:middle; }
   .gtag { display:inline-block; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
           vertical-align:middle; background:#16212e; border:1px solid #294056; color:#aecbe2;
           border-radius:11px; padding:1px 10px; font-size:13.5px; }
@@ -379,9 +380,8 @@ function lifecycle(op, mm, gap){
 function cell(c,r){
   let v=c.get(r);
   if(c.cls==='title'){
-    const u=r.url||'#'; const on=isBm(r.id);
-    return `<span class="bmstar${on?' on':''}" onclick="bmToggle('${r.id}',event)" title="ブックマーク">${on?'★':'☆'}</span>`
-      +`<a href="${u}" target="_blank" rel="noopener">${esc(v)}</a>`;
+    const u=r.url||'#';
+    return `<a href="${u}" target="_blank" rel="noopener">${esc(v)}</a>`;
   }
   if(c.statePill) return stPill(v);
   if(c.k==='flags') return flagCell(v);  // 🎥は廃止(YT列の一致率と完全重複のため)
@@ -482,7 +482,7 @@ function detailRow(r,span){
     : '';
   return `<tr class="detail hidden"><td colspan="${span}"><div class="inner">
     <button class="closeBtn" onclick="closeDetail(event,this)" title="閉じる">×</button>
-    <div class="full dtitlebar"><a href="${r.url||'#'}" target="_blank" rel="noopener" class="dtitle">${esc(r.title||'')}</a>
+    <div class="full dtitlebar"><span class="bmstar dbmstar${isBm(r.id)?' on':''}" onclick="bmToggle('${r.id}',event)" title="ブックマーク">${isBm(r.id)?'★':'☆'}</span><a href="${r.url||'#'}" target="_blank" rel="noopener" class="dtitle">${esc(r.title||'')}</a>
       <div class="drecap">${stPill(r.status_state)}`
       +(e?.capability_fit!=null?` <span class="rc">適合<b class="${sCls(e.capability_fit,5)}">${e.capability_fit}</b></span>`:'')
       +(e?.overall_score!=null?` <span class="rc">総合<b class="${sCls(e.overall_score,5)}">${e.overall_score}</b></span>`:'')
