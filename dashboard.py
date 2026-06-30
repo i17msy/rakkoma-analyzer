@@ -172,6 +172,7 @@ HTML = r"""<!DOCTYPE html>
   .ytth { height:80px; width:auto; border-radius:4px; border:1px solid #1c2a3a; display:block; }
   .ytera { color:#9fc6ef; font-size:16px; margin:8px 0 0 2px; }
   .ytrev { color:#c6d2de; font-size:16px; margin:5px 0 0 2px; } .ytrev b { font-weight:700; }
+  .rev-ok { color:#7fd6a0; } .rev-warn { color:#e2a04a; } .rev-bad { color:#e2493f; }
   .ytbias { color:#ecdcae; background:#181a10; border-left:3px solid #c9a84a; border-radius:5px;
             padding:8px 12px; margin:7px 0 2px; font-size:16.5px; line-height:1.6; }
   .report { margin:7px 0 3px 54px; background:#0e1a26; border:1px solid #1c3145; border-radius:7px; }
@@ -399,6 +400,13 @@ function cell(c,r){
 function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 
 function ytConf(v){ return v>=0.7?'s-hi':v>=0.5?'s-mid':'s-lo'; }
+// 収益逆算の比→段階(色/絵文字/意味)。極端は候補誤りを疑う
+function _revTier(x){
+  if(x<0.1||x>5)  return {e:'🚩', c:'rev-bad',  t:'候補誤り疑い'};
+  if(x<0.6)       return {e:'⚠️', c:'rev-warn', t:'資産依存'};
+  if(x<=2.0)      return {e:'✅', c:'rev-ok',   t:'妥当'};
+  return                 {e:'🔼', c:'rev-warn', t:'申告控えめ'};   // 2.0<x≤5
+}
 function reportBlock(b){
   if(!b) return '';
   const era=`<div class="ytb">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）</div>`;
@@ -427,9 +435,9 @@ function ytSection(cands){
     let bench='';
     if(c.benchmark){ const b=c.benchmark;
       let rev='';
-      if(b.rev){ const rv=b.rev; const f={under:'⚠️',over:'🔼',ok:'✅'}[rv.flag]||'';
-        rev=`<div class="ytrev" title="平均月間再生 ${Number(rv.monthly_views).toLocaleString()} × RPM ¥120〜450/千再生 で逆算した概算レンジ。ジャンル/Shorts/ロングテールで変動。比=逆算中央÷申告">`
-          +`💰 申告 ${yen(rv.claimed)}/月 vs 再生逆算 ${yen(rv.rev_low)}〜${yen(rv.rev_high)}/月 <b class="${rv.flag==='under'?'s-lo':rv.flag==='ok'?'s-hi':'mut'}">${f} ${rv.ratio}x</b></div>`; }
+      if(b.rev){ const rv=b.rev; const t=_revTier(rv.ratio);
+        rev=`<div class="ytrev" title="平均月間再生 ${Number(rv.monthly_views).toLocaleString()} × RPM ¥120〜450/千再生 で逆算した概算レンジ。ジャンル/Shorts/ロングテールで変動。比=逆算中央÷申告。極端な比は筆頭候補の誤マッチを疑う">`
+          +`💰 申告 ${yen(rv.claimed)}/月 vs 再生逆算 ${yen(rv.rev_low)}〜${yen(rv.rev_high)}/月 <b class="${t.c}">${t.e} ${rv.ratio}x （${t.t}）</b></div>`; }
       bench=`<div class="ytera">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）</div>`
         +rev+(b.bias_note?`<div class="ytbias">📊 ${esc(b.bias_note)}</div>`:''); }
     return `<div class="ytc"><div class="ytcline">`
