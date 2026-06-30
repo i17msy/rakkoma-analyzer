@@ -211,7 +211,8 @@ HTML = r"""<!DOCTYPE html>
   .ov-pie { width:42%; max-width:260px; aspect-ratio:1; height:auto; border-radius:50%; flex:0 0 auto; }
   .ov-donut { -webkit-mask:radial-gradient(circle, transparent 54%, #000 55%);
                       mask:radial-gradient(circle, transparent 54%, #000 55%); }
-  .ov-leg { display:flex; flex-direction:column; gap:9px; font-size:20px; color:#aab8c8; }
+  /* 凡例は固定幅(基準)にして、内容が変わっても「円＋凡例」の総幅＝中央位置を不変に保つ */
+  .ov-leg { display:flex; flex-direction:column; gap:9px; font-size:20px; color:#aab8c8; flex:0 0 38%; }
   .ov-leg div { white-space:nowrap; }
   .ov-leg i { display:inline-block; width:13px; height:13px; border-radius:3px; margin-right:6px; vertical-align:middle; }
   .ov-leg b { color:#e8eef6; font-weight:700; }
