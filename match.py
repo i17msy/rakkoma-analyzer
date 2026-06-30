@@ -116,9 +116,11 @@ def _yt_search(key: str, q: str, n: int = 50) -> list[str]:
             "key": key, "part": "snippet", "type": "channel", "q": q,
             "maxResults": min(n, 50), "regionCode": "JP", "relevanceLanguage": "ja",
         }, timeout=20)
-        if r.status_code == 403 and "quota" in r.text.lower():
+        # 日次quota超過は 403 quotaExceeded だけでなく 429 で "...per day" 文言でも来る → 即中断
+        low = r.text.lower()
+        if r.status_code in (403, 429) and ("quota" in low or "per day" in low):
             raise _QuotaExceeded(q)
-        if r.status_code == 429 or (r.status_code == 403 and "rate" in r.text.lower()):
+        if r.status_code == 429:                     # 真の短期レート制限のみリトライ
             time.sleep(3 * (attempt + 1))            # 3,6,9,12秒バックオフ
             continue
         r.raise_for_status()
