@@ -183,21 +183,25 @@ HTML = r"""<!DOCTYPE html>
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
-  /* 総合パネル */
+  /* 総合パネル（アコーディオン） */
   .overview { background:#0e1722; border:1px solid #1d2c3d; border-radius:10px;
-              margin:10px 4px 14px; padding:14px 16px; }
-  .ov-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; }
-  .ov-card { background:#0b1320; border:1px solid #1a2839; border-radius:8px; padding:11px 13px; }
-  .ov-card h4 { margin:0 0 8px; font-size:14px; color:#9fb4cc; font-weight:700; letter-spacing:.02em; }
+              margin:10px 4px 14px; padding:8px 10px; }
+  .ov-sec { border:1px solid #1a2839; border-radius:8px; margin:6px 0; background:#0b1320; overflow:hidden; }
+  .ov-sec-h { display:flex; align-items:baseline; gap:9px; padding:9px 12px; cursor:pointer; user-select:none; }
+  .ov-sec-h:hover { background:#101d2c; }
+  .ov-chev { color:#5f7da0; font-size:12px; width:12px; }
+  .ov-sec-t { font-size:15px; font-weight:700; color:#cdddf0; }
+  .ov-sec-teaser { margin-left:auto; color:#8aa3bd; font-size:13.5px; text-align:right; }
+  .ov-sec.open .ov-sec-h { border-bottom:1px solid #16263a; }
+  .ov-sec-b { padding:6px 14px 11px; }
   .ov-row { display:flex; justify-content:space-between; align-items:baseline; gap:10px;
-            padding:3px 0; font-size:15px; border-top:1px solid #131f2c; }
-  .ov-row:first-of-type { border-top:none; }
-  .ov-row b { font-size:18px; font-weight:700; color:#e8eef6; }
+            padding:4px 0; font-size:15px; border-top:1px solid #121e2b; }
+  .ov-row:first-child { border-top:none; }
   .ov-row .k { color:#7f93a8; font-size:13.5px; }
-  .ov-big { font-size:22px; font-weight:700; color:#7fd6a0; }
+  .ov-big { font-size:20px; font-weight:700; color:#7fd6a0; }
   .ov-tag { display:inline-block; background:#15273a; border:1px solid #24405c; color:#bcd4ee;
             border-radius:11px; padding:1px 9px; margin:2px 4px 2px 0; font-size:13px; }
-  .ov-note { color:#6f8298; font-size:12.5px; margin-top:9px; line-height:1.5; }
+  .ov-note { color:#6f8298; font-size:12.5px; margin-top:8px; line-height:1.5; }
   .ov-hi { color:#7fd6a0; } .ov-lo { color:#e2a04a; }
 </style>
 </head>
@@ -554,69 +558,139 @@ function toggleAllRows(){
 
 // ===== 総合パネル（表示中=フィルタ後の行を集計）=====
 let _lastRows=[];
+let _ovOpen={compose:true};   // 既定で「構成」だけ開く
 function toggleOverview(){
   const el=document.getElementById('overview'); el.hidden=!el.hidden;
   document.getElementById('ovBtn').textContent=el.hidden?'📊 総合':'📊 総合 ✕';
   if(!el.hidden) renderOverview(_lastRows);
 }
+function ovToggleSec(id){ _ovOpen[id]=!_ovOpen[id]; renderOverview(_lastRows); }
 function _med(a){ if(!a.length) return null; const s=[...a].sort((x,y)=>x-y); const m=s.length>>1;
   return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2); }
 function _pct(a,b){ return b?Math.round(a/b*100):0; }
-function _ovCard(title,rows){ return `<div class="ov-card"><h4>${esc(title)}</h4>${rows.join('')}</div>`; }
 function _ovRow(k,v,big){ return `<div class="ov-row"><span class="k">${esc(k)}</span><span${big?' class="ov-big"':''}>${v}</span></div>`; }
-function _genreToks(rows){ const t={};
+function _ovSec(id,title,teaser,body){
+  const op=!!_ovOpen[id];
+  return `<div class="ov-sec ${op?'open':''}"><div class="ov-sec-h" onclick="ovToggleSec('${id}')">`
+    +`<span class="ov-chev">${op?'▾':'▸'}</span><span class="ov-sec-t">${esc(title)}</span>`
+    +`<span class="ov-sec-teaser">${teaser}</span></div>`
+    +(op?`<div class="ov-sec-b">${body}</div>`:'')+`</div>`;
+}
+function _toks(rows){ const t={};
   rows.forEach(r=>{ const g=r.evaluation?.genre; if(!g) return;
     g.split(/[\/、・,\s]+/).forEach(w=>{ w=w.trim(); if(w.length>=2) t[w]=(t[w]||0)+1; }); });
-  return Object.entries(t).sort((a,b)=>b[1]-a[1]).slice(0,6); }
+  return Object.entries(t).sort((a,b)=>b[1]-a[1]); }
+function _tags(arr,n){ return arr.slice(0,n).map(t=>`<span class="ov-tag">${esc(t[0])} ${t[1]}</span>`).join(''); }
+
 function renderOverview(rows){
   const el=document.getElementById('overview'); if(el.hidden) return;
-  const n=rows.length, st=s=>rows.filter(r=>r.status_state===s).length;
-  const open=st('募集中'), sold=st('成約済み'), ended=st('受付終了');
+  const n=rows.length;
+  const stc=s=>rows.filter(r=>r.status_state===s).length;
+  const open=stc('募集中'), sold=stc('成約済み'), ended=stc('受付終了');
+  const ev=rows.filter(r=>r.evaluation);
   const vc=v=>rows.filter(r=>r.evaluation?.verdict===v).length;
-  const buy=vc('買い'), watch=vc('様子見'), pass=vc('見送り'), nev=rows.filter(r=>!r.evaluation).length;
+  const buy=vc('買い'), watch=vc('様子見'), pass=vc('見送り'), nev=n-ev.length;
+  let H='';
+
+  // ① 構成
+  H+=_ovSec('compose','構成',`${n}件 · 募${open}/成${sold}/終${ended}`,
+    _ovRow('状態',`募集 ${open} / 成約 ${sold} / 受付終了 ${ended}`)
+   +_ovRow('判定',`<span class="ov-hi">買 ${buy}</span> · 様 ${watch} · 見 ${pass} · <span class="mut">未 ${nev}</span>`));
+
+  // ② 能力適合（作れる射程）
+  const fits=ev.map(r=>r.evaluation.capability_fit).filter(v=>v!=null);
+  const reach=fits.filter(v=>v>=4).length, fd=k=>fits.filter(v=>v===k).length;
+  H+=_ovSec('fit','能力適合（作れる射程）',
+    fits.length?`射程≥4: <span class="ov-hi">${reach}</span> (${_pct(reach,fits.length)}%)`:'評価なし',
+    fits.length?(_ovRow('射程 ≥4（作れる）',`<span class="ov-hi">${reach}件 / 評価${fits.length}件 (${_pct(reach,fits.length)}%)</span>`,true)
+     +_ovRow('適合 5 / 4',`${fd(5)} / ${fd(4)}`)
+     +_ovRow('適合 3 / 2 / 1',`${fd(3)} / ${fd(2)} / ${fd(1)}`)):'<div class="ov-note">評価済みがありません。</div>');
+
+  // ③ YouTube照合カバレッジ
+  const yt=rows.filter(r=>r.candidates&&r.candidates.length);
+  const confs=yt.map(r=>r.candidates[0].confidence).filter(v=>v!=null);
+  const hi=confs.filter(v=>v>=0.8).length;
+  const bench=rows.filter(r=>r.candidates&&r.candidates.some(c=>c.benchmark)).length;
+  const cmed=_med(confs);
+  H+=_ovSec('yt','YouTube照合カバレッジ',
+    `照合 ${yt.length}/${n} (${_pct(yt.length,n)}%)${cmed!=null?` · 一致中央 ${Math.round(cmed*100)}%`:''}`,
+    _ovRow('照合済み',`<span class="ov-hi">${yt.length}件</span> / ${n}件 (${_pct(yt.length,n)}%)`,true)
+   +_ovRow('一致率 中央値',cmed==null?'–':Math.round(cmed*100)+'%')
+   +_ovRow('高一致 ≥80%',`${hi}件`)
+   +_ovRow('ベンチ取得済み',`${bench}件`));
+
+  // ④ 市場乖離・機会
+  const tgt=rows.filter(r=>(r.flags||[]).some(f=>f.startsWith('交渉'))).length;
+  const undervalued=rows.filter(r=>r.status_state==='受付終了'&&r.evaluation&&r.evaluation.overall_score>=2).length;
+  H+=_ovSec('gap','市場乖離・機会',`🎯${tgt} · 割安候補${undervalued}`,
+    _ovRow('🎯 交渉ターゲット（活性）',`<span class="ov-hi">${tgt}件</span>`,true)
+   +_ovRow('高評価×売れ残り（受付終了×総合≥2）',`${undervalued}件`)
+   +`<div class="ov-note">高評価なのに売れず取り下げ＝強気価格の割安交渉余地（本家を超える核心）。</div>`);
+
+  // ⑤ 価格・利益
   const pmed=_med(rows.map(r=>r.price).filter(v=>v!=null));
   const profmed=_med(rows.map(r=>r.profit).filter(v=>v!=null));
   const pbmed=_med(rows.map(r=>r.metrics?.payback_months_recent).filter(v=>v!=null));
-  const compose=_ovCard(`構成（表示 ${n}件）`,[
-    _ovRow('状態',`募集 ${open} / 成約 ${sold} / 終了 ${ended}`),
-    _ovRow('判定',`<span class="ov-hi">買 ${buy}</span> 様 ${watch} 見 ${pass} <span class="mut">未 ${nev}</span>`),
-  ]);
-  const money=_ovCard('価格・利益（中央値）',[
-    _ovRow('価格',yen(pmed),true),
-    _ovRow('利益/月',yen(profmed)),
-    _ovRow('回収',pbmed==null?'–':pbmed+'ヶ月'),
-  ]);
-  let speed='', zone='', match='', note='';
+  H+=_ovSec('money','価格・利益（中央値）',`価格 ${yen(pmed)}`,
+    _ovRow('価格 中央値',yen(pmed),true)
+   +_ovRow('利益/月 中央値',yen(profmed))
+   +_ovRow('回収 中央値',pbmed==null?'–':pbmed+'ヶ月'));
+
+  // ⑥ 市場の速さ・即決ゾーン
   const sr=rows.filter(r=>r.status_state==='成約済み'&&r.dwell_days!=null);
+  let spdT='成約済みなし', spdB='<div class="ov-note">状態=成約済み/すべて で表示されます。</div>';
   if(sr.length){
     const dw=sr.map(r=>r.dwell_days);
-    const fast=sr.filter(r=>r.dwell_days<=7), w30=sr.filter(r=>r.dwell_days<=30), w90=sr.filter(r=>r.dwell_days<=90);
-    const slow=sr.filter(r=>r.dwell_days>30);
-    speed=_ovCard(`市場の速さ（成約済み ${sr.length}件）`,[
-      _ovRow('滞留 中央値',_med(dw)+'日',true),
-      _ovRow('即決 ≤7日',`<span class="ov-hi">${fast.length}件 (${_pct(fast.length,sr.length)}%)</span>`),
-      _ovRow('≤30日 / ≤90日',`${_pct(w30.length,sr.length)}% / ${_pct(w90.length,sr.length)}%`),
-    ]);
+    const fast=sr.filter(r=>r.dwell_days<=7), w30=sr.filter(r=>r.dwell_days<=30), w90=sr.filter(r=>r.dwell_days<=90), slow=sr.filter(r=>r.dwell_days>30);
     const fp=_med(fast.map(r=>r.price).filter(v=>v!=null)), sp=_med(slow.map(r=>r.price).filter(v=>v!=null));
     const fpr=_med(fast.map(r=>r.profit).filter(v=>v!=null)), spr=_med(slow.map(r=>r.profit).filter(v=>v!=null));
-    const toks=_genreToks(fast);
-    zone=_ovCard(`即決ゾーン（≤7日 ${fast.length}件）↔ じっくり（>30日 ${slow.length}件）`,[
-      _ovRow('価格 中央値',`${yen(fp)} <span class="k">↔</span> ${yen(sp)}`),
-      _ovRow('利益 中央値',`${yen(fpr)} <span class="k">↔</span> ${yen(spr)}`),
-    ])+(toks.length?`<div class="ov-note">即決の頻出ジャンル: ${toks.map(t=>`<span class="ov-tag">${esc(t[0])} ${t[1]}</span>`).join('')}</div>`:'');
-    const se=sr.filter(r=>r.evaluation);
-    if(se.length){
-      const sb=se.filter(r=>r.evaluation.verdict==='買い').length, sw=se.filter(r=>r.evaluation.verdict==='様子見').length, sp2=se.filter(r=>r.evaluation.verdict==='見送り').length;
-      match=_ovCard(`判定 × 成約（市場が買った ${se.length}件を我々は）`,[
-        _ovRow('買い',`<span class="ov-hi">${sb}件 (${_pct(sb,se.length)}%)</span>`),
-        _ovRow('様子見',`${sw}件 (${_pct(sw,se.length)}%)`),
-        _ovRow('見送り',`<span class="ov-lo">${sp2}件 (${_pct(sp2,se.length)}%)</span>`),
-      ]);
-    }
-  } else {
-    note='<div class="ov-note">※ 速さ・即決ゾーン・判定照合は「状態=成約済み」または「すべて」で表示（現在の表示に成約済み0件）。</div>';
+    const toks=_toks(fast);
+    spdT=`滞留中央 ${_med(dw)}日 · 即決${_pct(fast.length,sr.length)}%`;
+    spdB=_ovRow('滞留 中央値',_med(dw)+'日',true)
+     +_ovRow('即決 ≤7日',`<span class="ov-hi">${fast.length}件 (${_pct(fast.length,sr.length)}%)</span>`)
+     +_ovRow('≤30日 / ≤90日',`${_pct(w30.length,sr.length)}% / ${_pct(w90.length,sr.length)}%`)
+     +_ovRow('価格 即決↔じっくり',`${yen(fp)} ↔ ${yen(sp)}`)
+     +_ovRow('利益 即決↔じっくり',`${yen(fpr)} ↔ ${yen(spr)}`)
+     +(toks.length?`<div class="ov-note">即決(≤7日)の頻出ジャンル: ${_tags(toks,6)}</div>`:'');
   }
-  el.innerHTML=`<div class="ov-grid">${compose}${money}${speed}${zone}${match}</div>${note}`;
+  H+=_ovSec('speed','市場の速さ・即決ゾーン',spdT,spdB);
+
+  // ⑦ 判定×成約
+  const se=sr.filter(r=>r.evaluation);
+  let mT='成約データなし', mB='<div class="ov-note">状態=成約済み/すべて で表示されます。</div>';
+  if(se.length){
+    const sb=se.filter(r=>r.evaluation.verdict==='買い').length, sw=se.filter(r=>r.evaluation.verdict==='様子見').length, sp2=se.filter(r=>r.evaluation.verdict==='見送り').length;
+    mT=`買い${_pct(sb,se.length)}%（成約${se.length}件）`;
+    mB=_ovRow('買い',`<span class="ov-hi">${sb}件 (${_pct(sb,se.length)}%)</span>`)
+     +_ovRow('様子見',`${sw}件 (${_pct(sw,se.length)}%)`)
+     +_ovRow('見送り',`<span class="ov-lo">${sp2}件 (${_pct(sp2,se.length)}%)</span>`)
+     +`<div class="ov-note">市場が買った案件を我々はどう判定していたか（総合≠市場の検証）。</div>`;
+  }
+  H+=_ovSec('match','判定 × 成約',mT,mB);
+
+  // ⑧ リスク/実績フラグ分布
+  const ft={}; rows.forEach(r=>(r.flags||[]).forEach(f=>{ ft[f]=(ft[f]||0)+1; }));
+  const fl=Object.entries(ft).sort((a,b)=>b[1]-a[1]);
+  H+=_ovSec('flags','リスク/実績フラグ分布',
+    fl.length?`${esc(fl[0][0])} ${fl[0][1]}${fl.length>1?` 他${fl.length-1}種`:''}`:'フラグなし',
+    fl.length?_tags(fl,14):'<div class="ov-note">フラグはありません。</div>');
+
+  // ⑨ データ品質・カバレッジ
+  const series=rows.filter(r=>r.metrics&&r.metrics.monetized_months!=null).length;
+  const ages=rows.map(r=>r.data_age_months).filter(v=>v!=null);
+  H+=_ovSec('quality','データ品質・カバレッジ',`評価 ${_pct(ev.length,n)}% · 系列 ${_pct(series,n)}%`,
+    _ovRow('評価済み',`${ev.length}件 / ${n}件 (${_pct(ev.length,n)}%)`,true)
+   +_ovRow('収益系列あり',`${series}件 (${_pct(series,n)}%)`)
+   +_ovRow('データ鮮度 中央値',ages.length?_med(ages)+'ヶ月前':'–')
+   +`<div class="ov-note">カバレッジ偏り・系列欠落・鮮度を把握し集計を過信しないため。</div>`);
+
+  // ⑩ 制作様式（頻出ジャンル語）
+  const at=_toks(rows);
+  H+=_ovSec('style','制作様式（頻出ジャンル語）',
+    at.length?`${esc(at[0][0])} ${at[0][1]} 他`:'語なし',
+    at.length?_tags(at,16)+`<div class="ov-note">勝ち筋はトピックでなく制作様式（AI/顔なし/まとめ…）に出る。</div>`:'<div class="ov-note">評価済みジャンルがありません。</div>');
+
+  el.innerHTML=H;
 }
 
 render();
