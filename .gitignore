@@ -9,3 +9,5 @@ data/idle_hosts.txt
 data/backups/
 data/yt_api_key
 data/exports/
+bookmarks.json
+bookmarks_db.json

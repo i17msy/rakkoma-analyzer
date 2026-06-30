@@ -313,6 +313,7 @@ HTML = r"""<!DOCTYPE html>
 
 <script>
 const DATA = __DATA__;
+const _dbBookmarks = __BOOKMARKS__;   // DB(bookmarksテーブル)由来の★。localStorageと統合する＝マシン跨ぎ
 const COLS = [
   {k:'title',  label:'案件',     get:r=>r.title||'', cls:'title'},
   {k:'state',  label:'状態',     get:r=>r.status_state ?? null, statePill:true, align:'center'},
@@ -798,7 +799,7 @@ function renderOverview(rows){
 }
 
 // ===== ★ブックマーク（localStorage・サーバ不要・再生成耐性あり）=====
-let _bm = new Set((()=>{ try{ return JSON.parse(localStorage.getItem('rakkoma_bookmarks')||'[]'); }catch(e){ return []; } })().map(String));
+let _bm = new Set([...(()=>{ try{ return JSON.parse(localStorage.getItem('rakkoma_bookmarks')||'[]'); }catch(e){ return []; } })(), ...(_dbBookmarks||[])].map(String));
 function isBm(id){ return _bm.has(String(id)); }
 function bmCount(){ const el=document.getElementById('bmcnt'); if(el) el.textContent=_bm.size?`(${_bm.size})`:''; }
 function bmToggle(id, ev){ ev.stopPropagation(); id=String(id);
@@ -857,8 +858,14 @@ def main() -> None:
                 and (r.get("days_listed") or 0) >= 30):
             r.setdefault("flags", []).append("交渉ターゲット")
     data = json.dumps(rows, ensure_ascii=False).replace("</", "<\\/")
+    try:                                              # DB の bookmarks テーブル（あれば）を★の種にする
+        bms = [str(r[0]) for r in conn.execute("SELECT listing_id FROM bookmarks")]
+    except sqlite3.OperationalError:
+        bms = []
     generated = datetime.now(JST).strftime("%Y-%m-%d %H:%M JST")
-    html = HTML.replace("__DATA__", data).replace("__GENERATED__", generated)
+    html = (HTML.replace("__DATA__", data)
+                .replace("__BOOKMARKS__", json.dumps(bms))
+                .replace("__GENERATED__", generated))
     DASHBOARD_FILE.write_text(html, encoding="utf-8")
     n_eval = sum(1 for r in rows if r.get("evaluation"))
     print(f"生成: {DASHBOARD_FILE} （全{len(rows)}件 / 評価済み{n_eval}件）")
