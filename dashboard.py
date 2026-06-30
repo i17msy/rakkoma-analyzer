@@ -550,7 +550,7 @@ function render(){
   });
 
   const col=COLS.find(c=>c.k===sortKey);
-  rows.sort((a,b)=>{
+  if(col) rows.sort((a,b)=>{                          // sortKey=null(3回目)は並べ替えず既定順を維持
     let x=keyVal(col,a), y=keyVal(col,b);
     const xn=x==null, yn=y==null;
     if(xn&&!yn) return 1; if(yn&&!xn) return -1;       // null は常に最下部
@@ -579,7 +579,13 @@ function render(){
   // 行を作り直したので全展開状態はリセット
   _allOpen=false; const _ta=document.getElementById('toggleAll'); if(_ta) _ta.textContent='▼ 全展開';
 }
-function sortBy(k){ if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=(k==='verdict')?1:-1; } render(); }
+function sortBy(k){
+  const first=(k==='verdict')?1:-1;                // その列の初回方向(通常=降順 / 判定=昇順)
+  if(sortKey!==k){ sortKey=k; sortDir=first; }      // 1回目: 初回方向
+  else if(sortDir===first){ sortDir=-first; }       // 2回目: 逆方向
+  else { sortKey=null; sortDir=-1; }                // 3回目: ソート無し(既定の並び)
+  render();
+}
 function toggle(tr){ const d=tr.nextElementSibling; const opening=d.classList.contains('hidden'); d.classList.toggle('hidden'); tr.classList.toggle('open', opening); }
 function closeDetail(ev,btn){ ev.stopPropagation(); const d=btn.closest('tr.detail'); d.classList.add('hidden'); if(d.previousElementSibling) d.previousElementSibling.classList.remove('open'); }
 
