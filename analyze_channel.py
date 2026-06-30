@@ -226,9 +226,49 @@ def _sonnet_insight(listing_id, ykey, cid, vids, win, cliff):
         return None
 
 
+def _bias_signals(monthly: dict) -> dict:
+    """月別中央再生から再生の時間的偏りを決定論で算出（LLM不要・無料）。"""
+    if not monthly:
+        return {}
+    ms = sorted(monthly)
+    peak_m = max(monthly, key=monthly.get)
+    peak_v = monthly[peak_m]
+    recent = [monthly[m] for m in ms[-3:]]
+    recent_med = int(statistics.median(recent)) if recent else 0
+    return {"peak_month": peak_m, "peak_view": peak_v,
+            "recent_med": recent_med,
+            "recent_ratio": round(recent_med / peak_v, 2) if peak_v else None,
+            "span": f"{ms[0]}〜{ms[-1]}", "n_months": len(ms)}
+
+
+def _bias_note(monthly: dict, win: list, cliff, sig: dict) -> str | None:
+    """再生の時間的偏りを1〜2文で簡潔に示唆（Sonnet・短文・約1円）。鍵が無ければNone。"""
+    akey = os.environ.get("ANTHROPIC_API_KEY")
+    if not akey or not monthly:
+        return None
+    import anthropic
+    traj = " / ".join(f"{m}:{monthly[m]:,}" for m in sorted(monthly))
+    ctx = (f"月別中央再生(公開月別): {traj}\n"
+           f"ピーク: {sig.get('peak_month')}({sig.get('peak_view'):,}) / "
+           f"直近3ヶ月中央: {sig.get('recent_med'):,}(ピーク比 {sig.get('recent_ratio')}) / "
+           f"勝ち筋era: {win[0]['date'] if win else '?'}〜{win[-1]['date'] if win else '?'}(崖={cliff})")
+    sys_p = ("あなたはYouTubeチャンネルの再生数の時間的偏りを読むアナリスト。月別中央再生(動画の公開月別)を見て、"
+             "(1)再生が過去の資産に偏り直近の新作が伸びていないか、(2)ベンチマークするなら着目すべき時期、を"
+             "簡潔に1〜2文の日本語で述べよ。注意: 直近月が低いのは新作の再生蓄積が浅いだけの可能性もあるので断定を避け、"
+             "ピーク期との差が大きい/勝ち筋eraが過去に固まっている場合のみ『過去資産で延命』と判断する。前置き無しで示唆だけ。")
+    try:
+        cli = anthropic.Anthropic(api_key=akey)
+        r = cli.messages.create(model="claude-sonnet-4-6", max_tokens=220,
+                                system=sys_p, messages=[{"role": "user", "content": ctx}])
+        return "".join(b.text for b in r.content if b.type == "text").strip() or None
+    except Exception as e:
+        print(f"[warn] 偏り示唆生成失敗: {e}", file=sys.stderr)
+        return None
+
+
 # ── メイン ────────────────────────────────────────────────────────────────────
 
-def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula, insight=None):
+def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula, insight=None, bias_note=None):
     """ダッシュボード表示用に channel_benchmark テーブルへ保存（channel_id 主キー）。"""
     import storage
     conn = storage.init()
@@ -240,11 +280,13 @@ def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula, insight
     cols = {r[1] for r in conn.execute("PRAGMA table_info(channel_benchmark)")}
     if "insight_json" not in cols:                                   # 既存テーブルへの追加
         conn.execute("ALTER TABLE channel_benchmark ADD COLUMN insight_json TEXT")
+    if "bias_note" not in cols:                                      # 再生偏り示唆（軽量）
+        conn.execute("ALTER TABLE channel_benchmark ADD COLUMN bias_note TEXT")
     tv = [{"id": v["id"], "date": v["date"], "views": v["views"], "title": v["title"]} for v in topv]
     conn.execute("""INSERT OR REPLACE INTO channel_benchmark
         (channel_id, listing_id, win_start, win_end, win_count, cliff,
-         monthly_json, top_videos_json, formula_json, fetched_at, insight_json)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)""", (
+         monthly_json, top_videos_json, formula_json, fetched_at, insight_json, bias_note)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", (
         cid, listing_id,
         win[0]["date"] if win else None, win[-1]["date"] if win else None,
         len(win), cliff,
@@ -252,7 +294,8 @@ def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula, insight
         json.dumps(tv, ensure_ascii=False),
         json.dumps(formula, ensure_ascii=False) if formula is not None else None,
         datetime.now(timezone.utc).isoformat(),
-        json.dumps(insight, ensure_ascii=False) if insight is not None else None))
+        json.dumps(insight, ensure_ascii=False) if insight is not None else None,
+        bias_note))
     conn.commit()
 
 
@@ -281,6 +324,12 @@ def run(ch: str, top: int = 3, listing_id: str | None = None) -> int:
     for v in topv:
         print(f"  {v['views']:>9,} | {v['date']} | {v['title'][:40]}  ({v['id']})")
 
+    # 再生の時間的偏り示唆（決定論シグナル＋Sonnet一言・約1円）— 軽量の既定インサイト
+    sig = _bias_signals(monthly)
+    bias = _bias_note(monthly, win, cliff, sig)
+    if bias:
+        print(f"\n--- 再生の偏り示唆 ---\n  {bias}")
+
     # 掘り下げ＝Sonnet 再解釈インサイト（ラッコ↔YouTube実データを両方ファクトとして再解釈）
     # ※Gemini動画formula抽出は将来の「本気でレシピ化」段階のオプションに格下げ（今は呼ばない）
     insight = None
@@ -298,7 +347,7 @@ def run(ch: str, top: int = 3, listing_id: str | None = None) -> int:
         print("\n（listing_id 未指定 → 再解釈インサイトはスキップ・勝ち筋eraのみ保存）")
 
     try:
-        _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula=None, insight=insight)
+        _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula=None, insight=insight, bias_note=bias)
     except Exception as e:
         print(f"[warn] ベンチマーク保存失敗: {e}", file=sys.stderr)
     return 0

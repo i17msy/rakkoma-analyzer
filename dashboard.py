@@ -48,6 +48,7 @@ def _load_youtube(conn):
                 "win_start": d.get("win_start"), "win_end": d.get("win_end"),
                 "win_count": d.get("win_count"), "cliff": d.get("cliff"),
                 "top_videos": json.loads(d.get("top_videos_json") or "[]"),
+                "bias_note": d.get("bias_note"),
                 "insight": json.loads(d["insight_json"]) if d.get("insight_json") else None}
     except sqlite3.OperationalError:
         pass
@@ -165,6 +166,9 @@ HTML = r"""<!DOCTYPE html>
   .ytcline a { color:#6db3f2; margin:0 9px; text-decoration:none; } .ytcline a:hover { text-decoration:underline; }
   .ytstrip { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 2px; }
   .ytth { height:80px; width:auto; border-radius:4px; border:1px solid #1c2a3a; display:block; }
+  .ytera { color:#9fc6ef; font-size:16px; margin:8px 0 0 2px; }
+  .ytbias { color:#ecdcae; background:#181a10; border-left:3px solid #c9a84a; border-radius:5px;
+            padding:8px 12px; margin:7px 0 2px; font-size:16.5px; line-height:1.6; }
   .report { margin:7px 0 3px 54px; background:#0e1a26; border:1px solid #1c3145; border-radius:7px; }
   .report > summary { cursor:pointer; padding:9px 12px; color:#ffd27a; font-weight:700;
             font-size:15.5px; line-height:1.55; list-style:none; outline:none; }
@@ -413,11 +417,15 @@ function ytSection(cands){
     let age='';
     if(c.fetched_at){ const d=Math.floor((Date.now()-new Date(c.fetched_at).getTime())/86400000);
       age=` <span class="mut ytage">· 📷${d<=0?'今日取得':d+'日前取得'}</span>`; }
+    let bench='';
+    if(c.benchmark){ const b=c.benchmark;
+      bench=`<div class="ytera">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）</div>`
+        +(b.bias_note?`<div class="ytbias">📊 ${esc(b.bias_note)}</div>`:''); }
     return `<div class="ytc"><div class="ytcline">`
       +`<b class="${ytConf(c.confidence)}">${Math.round(c.confidence*100)}%</b>`
       +`<a href="https://www.youtube.com/channel/${c.channel_id}" target="_blank" rel="noopener">${esc(c.title)}</a>`
       +`<span class="mut">登録${subs} / 投稿${c.videos} / 開設${c.published||'-'}</span>${age}</div>`
-      +(thumbs?`<div class="ytstrip">${thumbs}</div>`:'')+`</div>`;
+      +(thumbs?`<div class="ytstrip">${thumbs}</div>`:'')+bench+`</div>`;
   }).join('');
   return `<details class="full ytsec" open><summary>🎥 YouTube候補（近似順・サムネで設計を見る・${cands.length}件）</summary>${items}</details>`;
 }
