@@ -149,7 +149,7 @@ HTML = r"""<!DOCTYPE html>
   .dtitlebar { position:sticky; top:calc(var(--ctrlh,52px) + 33px); z-index:6; background:#0d121b;
                padding:8px 0 9px; margin:-2px 0 3px; border-bottom:1px solid var(--line); }
   .drecap { display:flex; flex-wrap:wrap; align-items:center; gap:7px 14px; margin-top:7px; font-size:15px; }
-  .drecap .rc { color:#aab8c8; } .drecap .rc b { color:#e8eef6; font-weight:700; font-size:17px; margin-left:2px; }
+  .drecap .rc { color:#c2cfdd; } .drecap .rc b { font-weight:700; font-size:17px; margin-left:2px; }
   .bars.scores { gap:22px; padding-bottom:6px; border-bottom:1px solid var(--line); }
   .scores .bar { font-size:18px; } .scores b { font-size:23px; font-weight:700; }
   .scores b.s-hi { color:var(--good); } .scores b.s-mid { color:var(--mid); } .scores b.s-lo { color:var(--bad); }
@@ -475,8 +475,8 @@ function detailRow(r,span){
     <button class="closeBtn" onclick="closeDetail(event,this)" title="閉じる">×</button>
     <div class="full dtitlebar"><a href="${r.url||'#'}" target="_blank" rel="noopener" class="dtitle">${esc(r.title||'')}</a>
       <div class="drecap">${stPill(r.status_state)}`
-      +(e?.capability_fit!=null?` <span class="rc">適合<b>${e.capability_fit}</b></span>`:'')
-      +(e?.overall_score!=null?` <span class="rc">総合<b>${e.overall_score}</b></span>`:'')
+      +(e?.capability_fit!=null?` <span class="rc">適合<b class="${sCls(e.capability_fit,5)}">${e.capability_fit}</b></span>`:'')
+      +(e?.overall_score!=null?` <span class="rc">総合<b class="${sCls(e.overall_score,5)}">${e.overall_score}</b></span>`:'')
       +(e?.verdict?` ${vPill(e.verdict)}`:'')
       +(r.price!=null?` <span class="rc">${yen(r.price)}</span>`:'')
       +(m.payback_months_recent!=null?` <span class="rc">回収<b>${m.payback_months_recent}</b>ヶ月</span>`:'')
