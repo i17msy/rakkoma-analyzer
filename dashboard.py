@@ -262,9 +262,9 @@ const COLS = [
   {k:'price',  label:'価格',     get:r=>r.price ?? null, num:true, money:true},
   {k:'payback',label:'回収月',   get:r=>r.metrics?.payback_months_recent ?? null, num:true},
   {k:'operating',label:'運営',   get:r=>r.operating_months ?? null, num:true},
-  {k:'stale',  label:'滞留',     get:r=>r.days_listed ?? null, num:true},
-  {k:'listed', label:'掲載',     get:r=>r.listed_at ?? null, cls:'date', align:'right'},
+  {k:'stale',  label:'滞留',     get:r=>r.dwell_days ?? null, num:true},
   {k:'settled', label:'成約',    get:r=>r.settled_at ?? null, cls:'date', align:'right'},
+  {k:'listed', label:'掲載',     get:r=>r.listed_at ?? null, cls:'date', align:'right'},
   {k:'genre',  label:'ジャンル', get:r=>r.evaluation?.genre||'', cls:'genre'},
 ];
 let sortKey='cap', sortDir=-1;   // 既定: 適合(降順) → 総合(降順)
@@ -332,7 +332,12 @@ function cell(c,r){
                    return `<span class="${a[1]}" title="勢い x${v}（直近÷平均）">${a[0]}</span>`; }
   if(c.k==='operating') return (v/12).toFixed(1)+'年';
   if(c.k==='gap') return v>=3 ? `<span class="s-lo">+${v}</span>` : '<span class="mut">–</span>';
-  if(c.k==='deal' || c.k==='stale') return v+'日';
+  if(c.k==='stale'){
+    const k=r.dwell_kind;
+    const tip=k==='sold'?'掲載→成約までの期間':k==='open'?'掲載→現在（募集中・進行中）':k==='ended'?'掲載→更新日の概算（終了日は非公開）':'';
+    return k==='ended' ? `<span class="mut" title="${tip}">~${v}日</span>` : `<span title="${tip}">${v}日</span>`;
+  }
+  if(c.k==='deal') return v+'日';
   return esc(String(v));
 }
 function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }

@@ -260,8 +260,27 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
         mo = int(m.group(2)) if m.lastindex and m.lastindex >= 2 else 6
         return max(0, (today.year - y) * 12 + (today.month - mo))
 
+    def _dwell(state, listed, deal_days, updated):
+        """市場に出ていた期間（滞留）。状態で意味が変わる。
+        募集中=掲載→現在(進行中) / 成約済み=掲載→成約(deal_days) / 受付終了=掲載→更新日(概算)。"""
+        if state == "成約済み":
+            return (deal_days, "sold") if deal_days is not None else (None, None)
+        if state == "募集中":
+            dd = _days_since(listed)
+            return (dd, "open") if dd is not None else (None, None)
+        if state == "受付終了":
+            try:  # 終了日は非公開 → 更新日を代理（概算）。負値は除外
+                y, m, da = map(int, listed.split("-"))
+                y2, m2, d2 = map(int, updated.split("-"))
+                g = (date(y2, m2, d2) - date(y, m, da)).days
+                return (g, "ended") if g >= 0 else (None, None)
+            except Exception:
+                return (None, None)
+        return (None, None)
+
     out = []
     for r in rows:
+        _dw, _dwk = _dwell(r["status_state"], r["listed_at"], r["deal_days"], r["updated_at"])
         d = {
             "id": r["id"], "url": r["url"], "title": r["title"], "category": r["category"],
             "asset_type": r["asset_type"],
@@ -269,6 +288,7 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
             "followers_str": r["followers_str"], "status_state": r["status_state"],
             "deal_days": r["deal_days"], "listed_at": r["listed_at"], "updated_at": r["updated_at"],
             "days_listed": _days_since(r["listed_at"]),
+            "dwell_days": _dw, "dwell_kind": _dwk,
             "settled_at": _settled_date(r["listed_at"], r["deal_days"]),
             "operating_months": _operating_months(r["start_date"]),
             "data_age_months": _months_since(r["updated_at"] or r["listed_at"]),
