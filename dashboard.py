@@ -236,6 +236,7 @@ HTML = r"""<!DOCTYPE html>
   <select id="atf" onchange="render()">
     <option value="__yt" selected>📺 YouTube案件のみ</option>
     <option value="">種別: すべて</option>
+    <option value="__nonyt">YouTube以外</option>
   </select>
   <select id="sf" onchange="render()">
     <option value="">状態: すべて</option>
@@ -507,6 +508,7 @@ function render(){
   let rows=DATA.filter(r=>{
     if(evalOnly && !r.evaluation) return false;
     if(atf==='__yt' && hasAT && !(r.asset_type||'').includes('YouTube')) return false;
+    if(atf==='__nonyt' && (r.asset_type||'').includes('YouTube')) return false;
     if(pf){ const ps=pf.split('-'); const lo=+ps[0], hi=ps[1]===''?null:+ps[1];
       if(r.price==null) return false;
       if(r.price<lo) return false;
