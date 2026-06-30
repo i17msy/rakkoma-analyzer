@@ -298,7 +298,7 @@ HTML = r"""<!DOCTYPE html>
   </select>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
   <label class="mut"><input type="checkbox" id="bmOnly" onchange="render()"> ★のみ <span id="bmcnt" class="mut"></span></label>
-  <button id="bmExportBtn" onclick="bmExport()" title="★をbookmarks.jsonに書き出し">⬇ ★書出</button>
+  <button id="bmExportBtn" onclick="bmExport()" title="★をbookmarks.jsonに書き出し">⬇</button>
   <button id="toggleAll" onclick="toggleAllRows()">▼ 全展開</button>
   <button id="ovBtn" onclick="toggleOverview()">📊 総合</button>
   <span class="sp"></span>
