@@ -317,23 +317,25 @@ def run(lid: str, n: int = 5, benchmark: bool = False, regen: bool = True, deep:
     return 0
 
 
-def batch(limit: int = 19) -> int:
-    """募集中×買い/様子見×適合≥4 の未検索案件を一括候補検索（サムネ視覚スキャン用に母数を広げる）。
-    掘り下げ(--benchmark)はしない＝母数集め。quota上限で安全中断（再実行で続きから）。"""
+def batch(limit: int = 19, bench: bool = True) -> int:
+    """募集中×買い/様子見×適合≥4×YouTube種別 の未検索案件を一括候補検索（サムネ視覚スキャン用に母数を広げる）。
+    既定で筆頭候補の軽いベンチ（勝ち筋era＋偏り示唆・~1円/件）も付与（重い再解釈レポートは無し）。
+    quota上限で安全中断（再実行で続きから）。"""
     conn = storage.init()
     searched = {r[0] for r in conn.execute("SELECT DISTINCT listing_id FROM channel_candidates")}
     rows = conn.execute("""
         SELECT l.id FROM listings l JOIN evaluations e ON e.listing_id=l.id
         WHERE l.status_state='募集中' AND e.verdict IN ('買い','様子見')
-          AND e.capability_fit>=4
+          AND e.capability_fit>=4 AND l.asset_type LIKE '%YouTube%'
         ORDER BY e.overall_score DESC""").fetchall()
     targets = [str(r[0]) for r in rows if str(r[0]) not in searched][:limit]
-    print(f"=== 一括候補検索（買い/様子見×適合≥4×未検索）対象 {len(targets)} 件 / 上限{limit} ===")
+    print(f"=== 一括候補検索（買い/様子見×適合≥4×YouTube×未検索）対象 {len(targets)} 件 / 上限{limit}"
+          f"{' ＋筆頭ベンチ(偏り示唆)' if bench else ''} ===")
     done = 0
     for i, lid in enumerate(targets, 1):
         print(f"\n──────── [{i}/{len(targets)}] 案件 {lid} ────────")
         try:
-            run(lid, benchmark=False, regen=False)
+            run(lid, benchmark=bench, regen=False, deep=False)
             done += 1
         except _QuotaExceeded:
             print(f"\n[STOP] YouTube quota 上限に到達。{done}件で中断（明日 --batch 再実行で続きから）", file=sys.stderr)
