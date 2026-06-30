@@ -234,9 +234,9 @@ HTML = r"""<!DOCTYPE html>
 <div class="controls">
   <input id="q" placeholder="ID・タイトル・ジャンル検索…" oninput="render()">
   <select id="atf" onchange="render()">
-    <option value="__yt" selected>📺 YouTube案件のみ</option>
+    <option value="__yt" selected>YouTube</option>
     <option value="">種別: すべて</option>
-    <option value="__nonyt">YouTube以外</option>
+    <option value="__nonyt">その他</option>
   </select>
   <select id="sf" onchange="render()">
     <option value="">状態: すべて</option>
