@@ -11,3 +11,4 @@ data/yt_api_key
 data/exports/
 bookmarks.json
 bookmarks_db.json
+*:Zone.Identifier
