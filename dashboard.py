@@ -200,7 +200,7 @@ HTML = r"""<!DOCTYPE html>
   .ov-row { display:flex; justify-content:space-between; align-items:baseline; gap:10px;
             padding:5px 0; font-size:17px; border-top:1px solid #121e2b; }
   .ov-row:first-child { border-top:none; }
-  .ov-row .k { color:#7f93a8; font-size:15px; }
+  .ov-row .k { color:#b3c2d4; font-size:15px; }
   .ov-big { font-size:24px; font-weight:700; color:#7fd6a0; }
   .ov-tag { display:inline-block; background:#15273a; border:1px solid #24405c; color:#bcd4ee;
             border-radius:11px; padding:2px 11px; margin:3px 5px 3px 0; font-size:15px; }
@@ -208,7 +208,7 @@ HTML = r"""<!DOCTYPE html>
   .ov-hi { color:#7fd6a0; } .ov-lo { color:#e2a04a; }
   /* 円/ドーナツグラフ（conic-gradient・ライブラリ不要） */
   .ov-chart { display:flex; gap:18px; align-items:center; margin:5px 0 12px; }
-  .ov-pie { display:inline-block; width:92px; height:92px; border-radius:50%; flex:0 0 auto; }
+  .ov-pie { display:inline-block; width:118px; height:118px; border-radius:50%; flex:0 0 auto; }
   .ov-donut { -webkit-mask:radial-gradient(circle, transparent 54%, #000 55%);
                       mask:radial-gradient(circle, transparent 54%, #000 55%); }
   .ov-leg { display:flex; flex-wrap:wrap; gap:5px 16px; font-size:16px; color:#aab8c8; }
