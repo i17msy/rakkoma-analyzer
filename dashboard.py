@@ -207,8 +207,8 @@ HTML = r"""<!DOCTYPE html>
   .ov-note { color:#6f8298; font-size:14px; margin-top:9px; line-height:1.55; }
   .ov-hi { color:#7fd6a0; } .ov-lo { color:#e2a04a; }
   /* 円/ドーナツグラフ（conic-gradient・ライブラリ不要） */
-  .ov-chart { display:flex; gap:18px; align-items:center; margin:5px 0 12px; }
-  .ov-pie { display:inline-block; width:118px; height:118px; border-radius:50%; flex:0 0 auto; }
+  .ov-chart { display:flex; gap:16px; align-items:center; margin:5px 0 12px; }
+  .ov-pie { width:46%; max-width:260px; aspect-ratio:1; height:auto; border-radius:50%; flex:0 0 auto; }
   .ov-donut { -webkit-mask:radial-gradient(circle, transparent 54%, #000 55%);
                       mask:radial-gradient(circle, transparent 54%, #000 55%); }
   .ov-leg { display:flex; flex-wrap:wrap; gap:5px 16px; font-size:16px; color:#aab8c8; }
