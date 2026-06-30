@@ -237,6 +237,15 @@ HTML = r"""<!DOCTYPE html>
     <option value="成約済み">成約済み</option>
     <option value="受付終了">受付終了</option>
   </select>
+  <select id="pf" onchange="render()">
+    <option value="">価格: すべて</option>
+    <option value="0-300000">〜30万</option>
+    <option value="300000-500000">30〜50万</option>
+    <option value="500000-1000000">50〜100万</option>
+    <option value="1000000-3000000">100〜300万</option>
+    <option value="3000000-10000000">300〜1000万</option>
+    <option value="10000000-">1000万〜</option>
+  </select>
   <select id="capOp" onchange="render()">
     <option value="">適合: すべて</option>
     <option value="ge">適合 ≥</option>
@@ -478,6 +487,7 @@ function render(){
   const ff=document.getElementById('ff').value;
   const sf=document.getElementById('sf').value;
   const atf=document.getElementById('atf').value;
+  const pf=document.getElementById('pf').value;
   const evalOnly=document.getElementById('evalOnly').checked;
   // asset_type が一件も埋まっていない間(バックフィル中)は種別フィルタを無効化して空表示を防ぐ
   const hasAT=DATA.some(r=>r.asset_type);
@@ -485,6 +495,10 @@ function render(){
   let rows=DATA.filter(r=>{
     if(evalOnly && !r.evaluation) return false;
     if(atf==='__yt' && hasAT && !(r.asset_type||'').includes('YouTube')) return false;
+    if(pf){ const ps=pf.split('-'); const lo=+ps[0], hi=ps[1]===''?null:+ps[1];
+      if(r.price==null) return false;
+      if(r.price<lo) return false;
+      if(hi!=null && r.price>=hi) return false; }
     if(sf){
       if(sf==='__closed'){ if(r.status_state!=='成約済み' && r.status_state!=='受付終了') return false; }
       else if(r.status_state!==sf) return false;
