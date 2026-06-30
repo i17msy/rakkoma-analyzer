@@ -214,8 +214,9 @@ HTML = r"""<!DOCTYPE html>
   /* 凡例は固定幅(基準)にして、内容が変わっても「円＋凡例」の総幅＝中央位置を不変に保つ */
   .ov-leg { display:flex; flex-direction:column; gap:9px; font-size:20px; color:#aab8c8; flex:0 0 38%; }
   .ov-leg div { white-space:nowrap; }
-  .ov-leg i { display:inline-block; width:13px; height:13px; border-radius:3px; margin-right:6px; vertical-align:middle; }
-  .ov-leg b { color:#e8eef6; font-weight:700; }
+  .ov-leg i { display:inline-block; width:13px; height:13px; border-radius:3px; margin-right:10px; vertical-align:middle; }
+  .ov-leg b { color:#e8eef6; font-weight:700; margin:0 13px 0 17px; }
+  .ov-leg .k { margin-left:2px; }
 </style>
 </head>
 <body>
