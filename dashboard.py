@@ -183,6 +183,22 @@ HTML = r"""<!DOCTYPE html>
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
+  /* 総合パネル */
+  .overview { background:#0e1722; border:1px solid #1d2c3d; border-radius:10px;
+              margin:10px 4px 14px; padding:14px 16px; }
+  .ov-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; }
+  .ov-card { background:#0b1320; border:1px solid #1a2839; border-radius:8px; padding:11px 13px; }
+  .ov-card h4 { margin:0 0 8px; font-size:14px; color:#9fb4cc; font-weight:700; letter-spacing:.02em; }
+  .ov-row { display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+            padding:3px 0; font-size:15px; border-top:1px solid #131f2c; }
+  .ov-row:first-of-type { border-top:none; }
+  .ov-row b { font-size:18px; font-weight:700; color:#e8eef6; }
+  .ov-row .k { color:#7f93a8; font-size:13.5px; }
+  .ov-big { font-size:22px; font-weight:700; color:#7fd6a0; }
+  .ov-tag { display:inline-block; background:#15273a; border:1px solid #24405c; color:#bcd4ee;
+            border-radius:11px; padding:1px 9px; margin:2px 4px 2px 0; font-size:13px; }
+  .ov-note { color:#6f8298; font-size:12.5px; margin-top:9px; line-height:1.5; }
+  .ov-hi { color:#7fd6a0; } .ov-lo { color:#e2a04a; }
 </style>
 </head>
 <body>
@@ -239,9 +255,11 @@ HTML = r"""<!DOCTYPE html>
   </select>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
   <button id="toggleAll" onclick="toggleAllRows()">▼ 全展開</button>
+  <button id="ovBtn" onclick="toggleOverview()">📊 総合</button>
   <span class="sp"></span>
   <span class="meta mut" id="fcnt"></span>
 </div>
+<div id="overview" class="overview" hidden></div>
 <table>
   <thead><tr id="head"></tr></thead>
   <tbody id="body"></tbody>
@@ -494,6 +512,8 @@ function render(){
 
   document.getElementById('cnt').textContent=DATA.length;
   document.getElementById('fcnt').textContent=`表示 ${rows.length.toLocaleString()} 件`;
+  _lastRows=rows;
+  if(!document.getElementById('overview').hidden) renderOverview(rows);
   document.getElementById('head').innerHTML=COLS.map(c=>{
     const ar=sortKey===c.k?(sortDir<0?' ▾':' ▴'):'';
     return `<th class="${acl(c)}" onclick="sortBy('${c.k}')">${c.label}${ar}</th>`;
@@ -530,6 +550,73 @@ function toggleAllRows(){
   }
   _allOpen=!_allOpen; _expandAll(_allOpen);
   document.getElementById('toggleAll').textContent=_allOpen?'▲ 全閉じる':'▼ 全展開';
+}
+
+// ===== 総合パネル（表示中=フィルタ後の行を集計）=====
+let _lastRows=[];
+function toggleOverview(){
+  const el=document.getElementById('overview'); el.hidden=!el.hidden;
+  document.getElementById('ovBtn').textContent=el.hidden?'📊 総合':'📊 総合 ✕';
+  if(!el.hidden) renderOverview(_lastRows);
+}
+function _med(a){ if(!a.length) return null; const s=[...a].sort((x,y)=>x-y); const m=s.length>>1;
+  return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2); }
+function _pct(a,b){ return b?Math.round(a/b*100):0; }
+function _ovCard(title,rows){ return `<div class="ov-card"><h4>${esc(title)}</h4>${rows.join('')}</div>`; }
+function _ovRow(k,v,big){ return `<div class="ov-row"><span class="k">${esc(k)}</span><span${big?' class="ov-big"':''}>${v}</span></div>`; }
+function _genreToks(rows){ const t={};
+  rows.forEach(r=>{ const g=r.evaluation?.genre; if(!g) return;
+    g.split(/[\/、・,\s]+/).forEach(w=>{ w=w.trim(); if(w.length>=2) t[w]=(t[w]||0)+1; }); });
+  return Object.entries(t).sort((a,b)=>b[1]-a[1]).slice(0,6); }
+function renderOverview(rows){
+  const el=document.getElementById('overview'); if(el.hidden) return;
+  const n=rows.length, st=s=>rows.filter(r=>r.status_state===s).length;
+  const open=st('募集中'), sold=st('成約済み'), ended=st('受付終了');
+  const vc=v=>rows.filter(r=>r.evaluation?.verdict===v).length;
+  const buy=vc('買い'), watch=vc('様子見'), pass=vc('見送り'), nev=rows.filter(r=>!r.evaluation).length;
+  const pmed=_med(rows.map(r=>r.price).filter(v=>v!=null));
+  const profmed=_med(rows.map(r=>r.profit).filter(v=>v!=null));
+  const pbmed=_med(rows.map(r=>r.metrics?.payback_months_recent).filter(v=>v!=null));
+  const compose=_ovCard(`構成（表示 ${n}件）`,[
+    _ovRow('状態',`募集 ${open} / 成約 ${sold} / 終了 ${ended}`),
+    _ovRow('判定',`<span class="ov-hi">買 ${buy}</span> 様 ${watch} 見 ${pass} <span class="mut">未 ${nev}</span>`),
+  ]);
+  const money=_ovCard('価格・利益（中央値）',[
+    _ovRow('価格',yen(pmed),true),
+    _ovRow('利益/月',yen(profmed)),
+    _ovRow('回収',pbmed==null?'–':pbmed+'ヶ月'),
+  ]);
+  let speed='', zone='', match='', note='';
+  const sr=rows.filter(r=>r.status_state==='成約済み'&&r.dwell_days!=null);
+  if(sr.length){
+    const dw=sr.map(r=>r.dwell_days);
+    const fast=sr.filter(r=>r.dwell_days<=7), w30=sr.filter(r=>r.dwell_days<=30), w90=sr.filter(r=>r.dwell_days<=90);
+    const slow=sr.filter(r=>r.dwell_days>30);
+    speed=_ovCard(`市場の速さ（成約済み ${sr.length}件）`,[
+      _ovRow('滞留 中央値',_med(dw)+'日',true),
+      _ovRow('即決 ≤7日',`<span class="ov-hi">${fast.length}件 (${_pct(fast.length,sr.length)}%)</span>`),
+      _ovRow('≤30日 / ≤90日',`${_pct(w30.length,sr.length)}% / ${_pct(w90.length,sr.length)}%`),
+    ]);
+    const fp=_med(fast.map(r=>r.price).filter(v=>v!=null)), sp=_med(slow.map(r=>r.price).filter(v=>v!=null));
+    const fpr=_med(fast.map(r=>r.profit).filter(v=>v!=null)), spr=_med(slow.map(r=>r.profit).filter(v=>v!=null));
+    const toks=_genreToks(fast);
+    zone=_ovCard(`即決ゾーン（≤7日 ${fast.length}件）↔ じっくり（>30日 ${slow.length}件）`,[
+      _ovRow('価格 中央値',`${yen(fp)} <span class="k">↔</span> ${yen(sp)}`),
+      _ovRow('利益 中央値',`${yen(fpr)} <span class="k">↔</span> ${yen(spr)}`),
+    ])+(toks.length?`<div class="ov-note">即決の頻出ジャンル: ${toks.map(t=>`<span class="ov-tag">${esc(t[0])} ${t[1]}</span>`).join('')}</div>`:'');
+    const se=sr.filter(r=>r.evaluation);
+    if(se.length){
+      const sb=se.filter(r=>r.evaluation.verdict==='買い').length, sw=se.filter(r=>r.evaluation.verdict==='様子見').length, sp2=se.filter(r=>r.evaluation.verdict==='見送り').length;
+      match=_ovCard(`判定 × 成約（市場が買った ${se.length}件を我々は）`,[
+        _ovRow('買い',`<span class="ov-hi">${sb}件 (${_pct(sb,se.length)}%)</span>`),
+        _ovRow('様子見',`${sw}件 (${_pct(sw,se.length)}%)`),
+        _ovRow('見送り',`<span class="ov-lo">${sp2}件 (${_pct(sp2,se.length)}%)</span>`),
+      ]);
+    }
+  } else {
+    note='<div class="ov-note">※ 速さ・即決ゾーン・判定照合は「状態=成約済み」または「すべて」で表示（現在の表示に成約済み0件）。</div>';
+  }
+  el.innerHTML=`<div class="ov-grid">${compose}${money}${speed}${zone}${match}</div>${note}`;
 }
 
 render();
