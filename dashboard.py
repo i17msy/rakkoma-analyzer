@@ -126,6 +126,8 @@ HTML = r"""<!DOCTYPE html>
   .score { font-weight:700; }
   .s-hi { color:var(--good); } .s-mid { color:var(--mid); } .s-lo { color:var(--bad); }
   .genre { color:var(--mut); }
+  .bmstar { cursor:pointer; color:#56657a; margin-right:8px; font-size:18px; user-select:none; }
+  .bmstar:hover { color:#f4d03f; } .bmstar.on { color:#f4d03f; }
   .gtag { display:inline-block; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
           vertical-align:middle; background:#16212e; border:1px solid #294056; color:#aecbe2;
           border-radius:11px; padding:1px 10px; font-size:13.5px; }
@@ -295,6 +297,8 @@ HTML = r"""<!DOCTYPE html>
     <option value="実績安定">✅ 実績安定</option>
   </select>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
+  <label class="mut"><input type="checkbox" id="bmOnly" onchange="render()"> ★のみ <span id="bmcnt" class="mut"></span></label>
+  <button id="bmExportBtn" onclick="bmExport()" title="★をbookmarks.jsonに書き出し">⬇ ★書出</button>
   <button id="toggleAll" onclick="toggleAllRows()">▼ 全展開</button>
   <button id="ovBtn" onclick="toggleOverview()">📊 総合</button>
   <span class="sp"></span>
@@ -375,8 +379,9 @@ function lifecycle(op, mm, gap){
 function cell(c,r){
   let v=c.get(r);
   if(c.cls==='title'){
-    const u=r.url||'#';
-    return `<a href="${u}" target="_blank" rel="noopener">${esc(v)}</a>`;
+    const u=r.url||'#'; const on=isBm(r.id);
+    return `<span class="bmstar${on?' on':''}" onclick="bmToggle('${r.id}',event)" title="ブックマーク">${on?'★':'☆'}</span>`
+      +`<a href="${u}" target="_blank" rel="noopener">${esc(v)}</a>`;
   }
   if(c.statePill) return stPill(v);
   if(c.k==='flags') return flagCell(v);  // 🎥は廃止(YT列の一致率と完全重複のため)
@@ -529,11 +534,13 @@ function render(){
   const atf=document.getElementById('atf').value;
   const pf=document.getElementById('pf').value;
   const evalOnly=document.getElementById('evalOnly').checked;
+  const bmOnly=document.getElementById('bmOnly').checked;
   // asset_type が一件も埋まっていない間(バックフィル中)は種別フィルタを無効化して空表示を防ぐ
   const hasAT=DATA.some(r=>r.asset_type);
 
   let rows=DATA.filter(r=>{
     if(evalOnly && !r.evaluation) return false;
+    if(bmOnly && !isBm(r.id)) return false;
     if(atf==='__yt' && hasAT && !(r.asset_type||'').includes('YouTube')) return false;
     if(atf==='__nonyt' && (r.asset_type||'').includes('YouTube')) return false;
     if(pf){ const ps=pf.split('-'); const lo=+ps[0], hi=ps[1]===''?null:+ps[1];
@@ -790,7 +797,27 @@ function renderOverview(rows){
   el.innerHTML=`<div class="ov-grid2">${H}</div>`;
 }
 
+// ===== ★ブックマーク（localStorage・サーバ不要・再生成耐性あり）=====
+let _bm = new Set((()=>{ try{ return JSON.parse(localStorage.getItem('rakkoma_bookmarks')||'[]'); }catch(e){ return []; } })().map(String));
+function isBm(id){ return _bm.has(String(id)); }
+function bmCount(){ const el=document.getElementById('bmcnt'); if(el) el.textContent=_bm.size?`(${_bm.size})`:''; }
+function bmToggle(id, ev){ ev.stopPropagation(); id=String(id);
+  if(_bm.has(id)) _bm.delete(id); else _bm.add(id);
+  try{ localStorage.setItem('rakkoma_bookmarks', JSON.stringify([..._bm])); }catch(e){}
+  bmCount();
+  if(document.getElementById('bmOnly').checked){ render(); }   // ★のみ表示中は外したら消す
+  else { const el=ev.currentTarget, on=_bm.has(id); el.textContent=on?'★':'☆'; el.classList.toggle('on',on); }
+}
+function bmExport(){
+  const ids=[..._bm];
+  const blob=new Blob([JSON.stringify(ids)], {type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='bookmarks.json'; document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(url);
+}
+
 render();
+bmCount();
 setCtrlH();
 window.addEventListener('resize', setCtrlH);
 </script>
