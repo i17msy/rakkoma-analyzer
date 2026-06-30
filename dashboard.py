@@ -175,6 +175,7 @@ HTML = r"""<!DOCTYPE html>
   .ytera { color:#9fc6ef; font-size:16px; margin:8px 0 0 2px; }
   .ytrev { color:#c6d2de; font-size:16px; margin:5px 0 0 2px; } .ytrev b { font-weight:700; }
   .rev-ok { color:#7fd6a0; } .rev-warn { color:#e2a04a; } .rev-bad { color:#e2493f; }
+  .ytrev-none { color:#e2705a; } .ytrev-none b { color:#e2705a; font-weight:700; }
   .ytbias { color:#ecdcae; background:#181a10; border-left:3px solid #c9a84a; border-radius:5px;
             padding:8px 12px; margin:7px 0 2px; font-size:16.5px; line-height:1.6; }
   .report { margin:7px 0 3px 54px; background:#0e1a26; border:1px solid #1c3145; border-radius:7px; }
@@ -440,7 +441,7 @@ function ytSection(cands){
       if(b.rev){ const rv=b.rev; const t=_revTier(rv.ratio);
         rev=`<div class="ytrev" title="平均月間再生 ${Number(rv.monthly_views).toLocaleString()} × RPM ¥120〜450/千再生 で逆算した概算レンジ。ジャンル/Shorts/ロングテールで変動。比=逆算中央÷申告。極端な比は筆頭候補の誤マッチを疑う">`
           +`💰 申告 ${yen(rv.claimed)}/月 vs 再生逆算 ${yen(rv.rev_low)}〜${yen(rv.rev_high)}/月 <b class="${t.c}">${t.e} ${rv.ratio}x （${t.t}）</b></div>`; }
-      else { rev=`<div class="ytrev mut" title="ラッコに月次の申告利益が開示されていないため逆算できません（収益条件達成と謳いつつ数字非開示＝注意）">💰 申告利益の開示なし（逆算不可）</div>`; }
+      else { rev=`<div class="ytrev ytrev-none" title="ラッコに月次の申告利益が開示されていないため逆算できません（収益条件達成と謳いつつ数字非開示＝注意）">💰 <b>申告利益の開示なし（逆算不可）</b></div>`; }
       bench=`<div class="ytera">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）</div>`
         +rev+(b.bias_note?`<div class="ytbias">📊 ${esc(b.bias_note)}</div>`:''); }
     return `<div class="ytc"><div class="ytcline">`
