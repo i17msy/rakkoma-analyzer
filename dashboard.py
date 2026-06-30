@@ -570,7 +570,7 @@ function toggleAllRows(){
 
 // ===== 総合パネル（表示中=フィルタ後の行を集計）=====
 let _lastRows=[];
-let _ovOpen={compose:true};   // 既定で「構成」だけ開く
+let _ovOpen={compose:true,fit:true,yt:true,gap:true,money:true,speed:true};   // 既定で1〜2行目(〜市場の速さ)を開く
 function toggleOverview(){
   const el=document.getElementById('overview'); el.hidden=!el.hidden;
   document.getElementById('ovBtn').textContent=el.hidden?'📊 総合':'📊 総合 ✕';
