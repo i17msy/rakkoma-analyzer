@@ -82,7 +82,8 @@ def _all_videos(key: str, cid: str) -> list[dict]:
 
 
 def _winning_era(vids: list[dict]):
-    """再生数で勝ち筋eraを客観抽出。月別中央値がピークの15%未満に落ちる最初の月=崖。"""
+    """再生数で勝ち筋eraを客観抽出。崖=ピーク月より後に月別中央値がピークの15%未満へ落ちる最初の月。
+    ※崖はピーク以降に限定する（後でピークが来る成長型chで、ピーク前の低い初月を誤って崖にしないため）。"""
     bym = collections.defaultdict(list)
     for v in vids:
         bym[v["date"][:7]].append(v["views"])
@@ -90,9 +91,10 @@ def _winning_era(vids: list[dict]):
     if not monthly:
         return {}, 0, None, []
     peak = max(monthly.values())
+    peak_m = max(monthly, key=monthly.get)        # ピーク月（同値なら最初）
     cliff = None
     for m in sorted(monthly):
-        if m > min(monthly) and peak and monthly[m] < peak * 0.15:
+        if m > peak_m and peak and monthly[m] < peak * 0.15:   # 崖はピーク月より後だけ
             cliff = m
             break
     win = [v for v in vids if cliff is None or v["date"][:7] < cliff]
