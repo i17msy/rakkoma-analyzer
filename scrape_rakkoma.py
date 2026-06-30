@@ -230,6 +230,12 @@ def _fetch_detail(pid: str, url: str) -> dict | None:
 # ── 分類ロジック ──────────────────────────────────────────────────────────────
 
 def _is_youtube(detail: dict, title: str = "") -> bool:
+    # 公式分類(譲渡物種別)があれば最優先で確定判定。タイトル推定より信頼でき、
+    # 「YouTube種別なのにタイトルに語が無い」取りこぼしも、「非YouTubeなのにタイトルに語がある」誤検出も両方防ぐ。
+    at = detail.get("asset_type", "")
+    if at:
+        return "YouTube" in at
+    # asset_type が取れない時のみ従来ヒューリスティック（安全網）
     # "プラットフォームの提供する収益化プログラム" = YouTube Partner Program
     biz = detail.get("biz_model", "")
     if "プラットフォームの提供する収益化プログラム" in biz:
@@ -237,7 +243,7 @@ def _is_youtube(detail: dict, title: str = "") -> bool:
     # "登録者" in followers_str は YouTube特有の登録者数表記
     if "登録者" in detail.get("followers_str", ""):
         return True
-    # タイトルにYouTube系キーワードがあれば（Stage1を通過済みだが安全網として）
+    # タイトルにYouTube系キーワードがあれば（最後の安全網）
     if title and any(kw in title for kw in YOUTUBE_TITLE_KEYWORDS):
         return True
     return False
