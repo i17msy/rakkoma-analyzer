@@ -21,6 +21,7 @@ import os
 import re
 import sqlite3
 import sys
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -109,15 +110,21 @@ class _QuotaExceeded(Exception):
 
 
 def _yt_search(key: str, q: str, n: int = 50) -> list[str]:
-    r = requests.get(f"{YT}/search", params={
-        "key": key, "part": "snippet", "type": "channel", "q": q,
-        "maxResults": min(n, 50), "regionCode": "JP", "relevanceLanguage": "ja",
-    }, timeout=20)
-    if r.status_code == 403 and "quota" in r.text.lower():
-        raise _QuotaExceeded(q)
-    r.raise_for_status()
-    return [it["id"]["channelId"] for it in r.json().get("items", [])
-            if it.get("id", {}).get("channelId")]
+    # 429(レート制限)は指数バックオフでリトライ。403+quota は日次上限なので即中断。
+    for attempt in range(4):
+        r = requests.get(f"{YT}/search", params={
+            "key": key, "part": "snippet", "type": "channel", "q": q,
+            "maxResults": min(n, 50), "regionCode": "JP", "relevanceLanguage": "ja",
+        }, timeout=20)
+        if r.status_code == 403 and "quota" in r.text.lower():
+            raise _QuotaExceeded(q)
+        if r.status_code == 429 or (r.status_code == 403 and "rate" in r.text.lower()):
+            time.sleep(3 * (attempt + 1))            # 3,6,9,12秒バックオフ
+            continue
+        r.raise_for_status()
+        return [it["id"]["channelId"] for it in r.json().get("items", [])
+                if it.get("id", {}).get("channelId")]
+    return []                                        # リトライ尽きたら空（この案件はスキップ扱い）
 
 
 def _yt_channels(key: str, ids: list[str]) -> list[dict]:
@@ -271,6 +278,7 @@ def run(lid: str, n: int = 5, benchmark: bool = False, regen: bool = True, deep:
     for q in queries:
         try:
             ids += _yt_search(key, q)
+            time.sleep(1.0)                              # 連射を避けてレート制限(429)を予防
         except _QuotaExceeded:
             raise                                        # バッチで安全中断するため握りつぶさない
         except Exception as e:
