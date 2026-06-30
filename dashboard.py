@@ -425,7 +425,7 @@ function ytSection(cands){
       +`<b class="${ytConf(c.confidence)}">${Math.round(c.confidence*100)}%</b>`
       +`<a href="https://www.youtube.com/channel/${c.channel_id}" target="_blank" rel="noopener">${esc(c.title)}</a>`
       +`<span class="mut">登録${subs} / 投稿${c.videos} / 開設${c.published||'-'}</span>${age}</div>`
-      +(thumbs?`<div class="ytstrip">${thumbs}</div>`:'')+bench+`</div>`;
+      +bench+(thumbs?`<div class="ytstrip">${thumbs}</div>`:'')+`</div>`;
   }).join('');
   return `<details class="full ytsec" open><summary>🎥 YouTube候補（近似順・サムネで設計を見る・${cands.length}件）</summary>${items}</details>`;
 }
