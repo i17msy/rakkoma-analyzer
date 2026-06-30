@@ -407,18 +407,59 @@ def run(ch: str, top: int = 3, listing_id: str | None = None, deep: bool = False
     return 0
 
 
+def export_urls(ch: str, frm: str | None = None, to: str | None = None, out: str | None = None) -> int:
+    """指定chの動画URLを期間指定で .txt 一覧出力（Whisperバッチ等の入口＝受け渡しパッケージ）。
+    期間未指定なら勝ち筋eraを既定範囲にする。日付は YYYY-MM か YYYY-MM-DD（両端含む）。"""
+    ykey = _key("YOUTUBE_API_KEY")
+    if not ykey:
+        print("YOUTUBE_API_KEY 未設定（env か ~/.bashrc）")
+        return 2
+    cid = _resolve(ykey, ch)
+    if not cid:
+        print(f"チャンネル解決失敗: {ch}")
+        return 1
+    vids = _all_videos(ykey, cid)
+    if not frm and not to:                                # 既定＝勝ち筋era
+        _m, _p, _cliff, win = _winning_era(vids)
+        if win:
+            frm, to = win[0]["date"], win[-1]["date"]
+        print(f"（期間未指定 → 勝ち筋era {frm}〜{to} を既定範囲に）")
+
+    def _in(d):
+        if frm and d < frm:
+            return False
+        if to and d[:len(to)] > to:                       # to が YYYY-MM なら月単位で両端含む
+            return False
+        return True
+    sel = sorted((v for v in vids if _in(v["date"])), key=lambda v: v["date"])
+    if not sel:
+        print("該当動画なし（期間を確認）")
+        return 0
+    expdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "exports")
+    os.makedirs(expdir, exist_ok=True)
+    path = out or os.path.join(expdir, f"{cid}_{frm or 'start'}_{to or 'end'}.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(f"https://www.youtube.com/watch?v={v['id']}" for v in sel) + "\n")
+    print(f"■ {ch} ({cid}) / 範囲 {frm or '最初'}〜{to or '最後'} / {len(sel)}本")
+    print(f"→ {path}")
+    for v in sel:
+        print(f"  {v['date']}  https://www.youtube.com/watch?v={v['id']}  {v['title'][:42]}")
+    return 0
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    top = 3
-    if "--top" in sys.argv:
-        top = int(sys.argv[sys.argv.index("--top") + 1])
-    listing_id = None
-    if "--listing" in sys.argv:
-        listing_id = sys.argv[sys.argv.index("--listing") + 1]
-    deep = "--deep" in sys.argv          # 重い再解釈レポートを生成（既定OFF・約$0.022）
+    def _flag(name):
+        return sys.argv[sys.argv.index(name) + 1] if name in sys.argv and sys.argv.index(name) + 1 < len(sys.argv) else None
     if not args:
-        print("使い方: python3 analyze_channel.py <channelId|@handle> [--top 3] [--listing <案件ID>] [--deep]")
+        print("使い方: python3 analyze_channel.py <channelId|@handle> [--top 3] [--listing <案件ID>] [--deep]\n"
+              "        python3 analyze_channel.py <channelId|@handle> --urls [--from YYYY-MM] [--to YYYY-MM] [--out path.txt]")
         sys.exit(2)
+    if "--urls" in sys.argv:                              # 動画URL一覧を期間指定で .txt 出力
+        sys.exit(export_urls(args[0], _flag("--from"), _flag("--to"), _flag("--out")))
+    top = int(_flag("--top")) if _flag("--top") else 3
+    listing_id = _flag("--listing")
+    deep = "--deep" in sys.argv          # 重い再解釈レポートを生成（既定OFF・約$0.022）
     sys.exit(run(args[0], top, listing_id=listing_id, deep=deep))
 
 
