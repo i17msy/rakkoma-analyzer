@@ -69,16 +69,28 @@ def _all_videos(key: str, cid: str) -> list[dict]:
         if not tok:
             break
     ids = [v["id"] for v in vids]
-    views = {}
-    for i in range(0, len(ids), 50):
+    views, durs = {}, {}
+    for i in range(0, len(ids), 50):                          # statistics＋contentDetails(尺)を同一callで（追加quotaなし）
         j = requests.get(f"{YT}/videos", params={
-            "key": key, "part": "statistics", "id": ",".join(ids[i:i + 50])}, timeout=20).json()
+            "key": key, "part": "statistics,contentDetails", "id": ",".join(ids[i:i + 50])}, timeout=20).json()
         for it in j.get("items", []):
             views[it["id"]] = int(it["statistics"].get("viewCount", 0))
+            durs[it["id"]] = _dur_sec(it.get("contentDetails", {}).get("duration", ""))
     for v in vids:
         v["views"] = views.get(v["id"], 0)
+        v["dur"] = durs.get(v["id"], 0)
+        v["short"] = 0 < v["dur"] <= 60                       # 60秒以下＝Shorts判定（RPMが桁違いに低い）
     vids.sort(key=lambda v: v["date"])
     return vids
+
+
+def _dur_sec(iso: str) -> int:
+    """ISO8601(PT#H#M#S)を秒に。"""
+    m = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", iso or "")
+    if not m:
+        return 0
+    h, mn, s = (int(x) if x else 0 for x in m.groups())
+    return h * 3600 + mn * 60 + s
 
 
 def _winning_era(vids: list[dict]):
@@ -243,29 +255,33 @@ def _bias_signals(monthly: dict) -> dict:
             "span": f"{ms[0]}〜{ms[-1]}", "n_months": len(ms)}
 
 
-# 日本YouTubeの一般的なAdSense RPM(¥/1000再生)レンジ。ジャンル/Shortsで大きく振れるため広めに取る。
-_RPM_LOW, _RPM_HIGH = 120, 450
+# 日本YouTubeの一般的なAdSense RPM(¥/1000再生)レンジ。長尺とShortsで桁違いなので分けて持つ。
+_RPM_LOW, _RPM_HIGH = 120, 450            # 長尺
+_SHORT_RPM_LOW, _SHORT_RPM_HIGH = 5, 50   # Shorts（広告プール分配が薄く長尺の1/5〜1/30）
 
 
 def _revenue_check(vids: list, claimed: int | None) -> dict | None:
     """総再生÷運営月数で平均月間再生を出し、RPMレンジで月収を逆算→申告利益と比較（決定論・無料・概算レンジ）。
+    Shortsは長尺と桁違いに低RPMなので、再生をShorts/長尺に分けて各レンジで逆算し合算（混在chも正しく扱う）。
     狙い: ラッコ最重要の申告収益が、実再生で物理的に妥当かのレンジ判定（点でなく幅）。"""
     if not vids or not claimed or claimed <= 0:
         return None
     from datetime import date
-    total = sum(v.get("views", 0) for v in vids)
+    sv = sum(v.get("views", 0) for v in vids if v.get("short"))      # Shorts再生
+    lv = sum(v.get("views", 0) for v in vids if not v.get("short"))  # 長尺再生
+    total = sv + lv
     try:                                              # 運営月数=最古動画→今日（実測。申告でなく）
         y, m, d = map(int, vids[0]["date"].split("-"))
         months = max(1.0, (datetime.now(timezone.utc).date() - date(y, m, d)).days / 30.4)
     except Exception:
         months = max(1.0, len(vids) / 4)
-    mv = total / months                               # 平均月間再生
-    low = int(mv * _RPM_LOW / 1000)
-    high = int(mv * _RPM_HIGH / 1000)
+    low = int((sv * _SHORT_RPM_LOW + lv * _RPM_LOW) / 1000 / months)
+    high = int((sv * _SHORT_RPM_HIGH + lv * _RPM_HIGH) / 1000 / months)
     ratio = round((low + high) / 2 / claimed, 2)
     flag = "ok" if 0.6 <= ratio <= 2.0 else ("under" if ratio < 0.6 else "over")
-    return {"claimed": int(claimed), "monthly_views": int(mv),
-            "rev_low": low, "rev_high": high, "ratio": ratio, "flag": flag}
+    return {"claimed": int(claimed), "monthly_views": int(total / months),
+            "rev_low": low, "rev_high": high, "ratio": ratio, "flag": flag,
+            "short_ratio": round(sv / total, 2) if total else 0}
 
 
 def _bias_note(monthly: dict, win: list, cliff, sig: dict, rev: dict | None = None) -> str | None:
@@ -280,8 +296,9 @@ def _bias_note(monthly: dict, win: list, cliff, sig: dict, rev: dict | None = No
            f"直近3ヶ月中央: {sig.get('recent_med'):,}(ピーク比 {sig.get('recent_ratio')}) / "
            f"勝ち筋era: {win[0]['date'] if win else '?'}〜{win[-1]['date'] if win else '?'}(崖={cliff})")
     if rev:
-        ctx += (f"\n収益逆算: 平均月間再生{rev['monthly_views']:,} → RPM逆算 ¥{rev['rev_low']:,}〜¥{rev['rev_high']:,}/月 "
-                f"vs 申告利益 ¥{rev['claimed']:,}/月（比 {rev['ratio']}x）")
+        sr = int(rev.get('short_ratio', 0) * 100)
+        ctx += (f"\n収益逆算: 平均月間再生{rev['monthly_views']:,}（Shorts比率{sr}%・RPMは長尺/Shortsを分けて算定済）"
+                f" → 逆算 ¥{rev['rev_low']:,}〜¥{rev['rev_high']:,}/月 vs 申告 ¥{rev['claimed']:,}/月（比 {rev['ratio']}x）")
     sys_p = ("あなたはYouTubeチャンネルの再生数の時間的偏りを読むアナリスト。月別中央再生(動画の公開月別)を見て、"
              "(1)再生が過去の資産に偏り直近の新作が伸びていないか、(2)ベンチマークするなら着目すべき時期、を"
              "簡潔に1〜2文の日本語で述べよ。注意: 直近月が低いのは新作の再生蓄積が浅いだけの可能性もあるので断定を避け、"
