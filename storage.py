@@ -232,6 +232,16 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
         except Exception:
             return None
 
+    def _settled_date(listed, deal_days):
+        """成約日 ≈ 公開日 + 成約までの日数（成約済みのみ deal_days を持つ）。"""
+        if not listed or deal_days is None:
+            return None
+        try:
+            y, m, dd = map(int, listed.split("-"))
+            return date.fromordinal(date(y, m, dd).toordinal() + int(deal_days)).isoformat()
+        except Exception:
+            return None
+
     def _months_since(s):
         """YYYY-MM-DD → 今日までの月数（データ鮮度用）。"""
         if not s:
@@ -259,6 +269,7 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
             "followers_str": r["followers_str"], "status_state": r["status_state"],
             "deal_days": r["deal_days"], "listed_at": r["listed_at"], "updated_at": r["updated_at"],
             "days_listed": _days_since(r["listed_at"]),
+            "settled_at": _settled_date(r["listed_at"], r["deal_days"]),
             "operating_months": _operating_months(r["start_date"]),
             "data_age_months": _months_since(r["updated_at"] or r["listed_at"]),
             "history_gap": ((r["monetized_months"] - _operating_months(r["start_date"]))

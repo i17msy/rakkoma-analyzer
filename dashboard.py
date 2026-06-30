@@ -264,6 +264,7 @@ const COLS = [
   {k:'operating',label:'運営',   get:r=>r.operating_months ?? null, num:true},
   {k:'stale',  label:'滞留',     get:r=>r.days_listed ?? null, num:true},
   {k:'listed', label:'掲載',     get:r=>r.listed_at ?? null, cls:'date', align:'right'},
+  {k:'settled', label:'成約',    get:r=>r.settled_at ?? null, cls:'date', align:'right'},
   {k:'genre',  label:'ジャンル', get:r=>r.evaluation?.genre||'', cls:'genre'},
 ];
 let sortKey='cap', sortDir=-1;   // 既定: 適合(降順) → 総合(降順)
