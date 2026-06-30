@@ -440,6 +440,7 @@ function ytSection(cands){
       if(b.rev){ const rv=b.rev; const t=_revTier(rv.ratio);
         rev=`<div class="ytrev" title="平均月間再生 ${Number(rv.monthly_views).toLocaleString()} × RPM ¥120〜450/千再生 で逆算した概算レンジ。ジャンル/Shorts/ロングテールで変動。比=逆算中央÷申告。極端な比は筆頭候補の誤マッチを疑う">`
           +`💰 申告 ${yen(rv.claimed)}/月 vs 再生逆算 ${yen(rv.rev_low)}〜${yen(rv.rev_high)}/月 <b class="${t.c}">${t.e} ${rv.ratio}x （${t.t}）</b></div>`; }
+      else { rev=`<div class="ytrev mut" title="ラッコに月次の申告利益が開示されていないため逆算できません（収益条件達成と謳いつつ数字非開示＝注意）">💰 申告利益の開示なし（逆算不可）</div>`; }
       bench=`<div class="ytera">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）</div>`
         +rev+(b.bias_note?`<div class="ytbias">📊 ${esc(b.bias_note)}</div>`:''); }
     return `<div class="ytc"><div class="ytcline">`
