@@ -207,11 +207,11 @@ HTML = r"""<!DOCTYPE html>
   .ov-note { color:#6f8298; font-size:14px; margin-top:9px; line-height:1.55; }
   .ov-hi { color:#7fd6a0; } .ov-lo { color:#e2a04a; }
   /* 円/ドーナツグラフ（conic-gradient・ライブラリ不要） */
-  .ov-chart { display:flex; gap:16px; align-items:center; margin:5px 0 12px; }
+  .ov-chart { display:flex; gap:26px; align-items:center; margin:5px 0 12px; }
   .ov-pie { width:46%; max-width:260px; aspect-ratio:1; height:auto; border-radius:50%; flex:0 0 auto; }
   .ov-donut { -webkit-mask:radial-gradient(circle, transparent 54%, #000 55%);
                       mask:radial-gradient(circle, transparent 54%, #000 55%); }
-  .ov-leg { display:flex; flex-wrap:wrap; gap:5px 16px; font-size:16px; color:#aab8c8; }
+  .ov-leg { display:flex; flex-direction:column; gap:7px; font-size:16px; color:#aab8c8; }
   .ov-leg div { white-space:nowrap; }
   .ov-leg i { display:inline-block; width:13px; height:13px; border-radius:3px; margin-right:6px; vertical-align:middle; }
   .ov-leg b { color:#e8eef6; font-weight:700; }
