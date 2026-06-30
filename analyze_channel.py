@@ -241,8 +241,33 @@ def _bias_signals(monthly: dict) -> dict:
             "span": f"{ms[0]}〜{ms[-1]}", "n_months": len(ms)}
 
 
-def _bias_note(monthly: dict, win: list, cliff, sig: dict) -> str | None:
-    """再生の時間的偏りを1〜2文で簡潔に示唆（Sonnet・短文・約1円）。鍵が無ければNone。"""
+# 日本YouTubeの一般的なAdSense RPM(¥/1000再生)レンジ。ジャンル/Shortsで大きく振れるため広めに取る。
+_RPM_LOW, _RPM_HIGH = 120, 450
+
+
+def _revenue_check(vids: list, claimed: int | None) -> dict | None:
+    """総再生÷運営月数で平均月間再生を出し、RPMレンジで月収を逆算→申告利益と比較（決定論・無料・概算レンジ）。
+    狙い: ラッコ最重要の申告収益が、実再生で物理的に妥当かのレンジ判定（点でなく幅）。"""
+    if not vids or not claimed or claimed <= 0:
+        return None
+    from datetime import date
+    total = sum(v.get("views", 0) for v in vids)
+    try:                                              # 運営月数=最古動画→今日（実測。申告でなく）
+        y, m, d = map(int, vids[0]["date"].split("-"))
+        months = max(1.0, (datetime.now(timezone.utc).date() - date(y, m, d)).days / 30.4)
+    except Exception:
+        months = max(1.0, len(vids) / 4)
+    mv = total / months                               # 平均月間再生
+    low = int(mv * _RPM_LOW / 1000)
+    high = int(mv * _RPM_HIGH / 1000)
+    ratio = round((low + high) / 2 / claimed, 2)
+    flag = "ok" if 0.6 <= ratio <= 2.0 else ("under" if ratio < 0.6 else "over")
+    return {"claimed": int(claimed), "monthly_views": int(mv),
+            "rev_low": low, "rev_high": high, "ratio": ratio, "flag": flag}
+
+
+def _bias_note(monthly: dict, win: list, cliff, sig: dict, rev: dict | None = None) -> str | None:
+    """再生の時間的偏りを1〜2文で簡潔に示唆（Sonnet・短文・約1円）。収益逆算があれば数字に錨を打つ。鍵が無ければNone。"""
     akey = os.environ.get("ANTHROPIC_API_KEY")
     if not akey or not monthly:
         return None
@@ -252,13 +277,18 @@ def _bias_note(monthly: dict, win: list, cliff, sig: dict) -> str | None:
            f"ピーク: {sig.get('peak_month')}({sig.get('peak_view'):,}) / "
            f"直近3ヶ月中央: {sig.get('recent_med'):,}(ピーク比 {sig.get('recent_ratio')}) / "
            f"勝ち筋era: {win[0]['date'] if win else '?'}〜{win[-1]['date'] if win else '?'}(崖={cliff})")
+    if rev:
+        ctx += (f"\n収益逆算: 平均月間再生{rev['monthly_views']:,} → RPM逆算 ¥{rev['rev_low']:,}〜¥{rev['rev_high']:,}/月 "
+                f"vs 申告利益 ¥{rev['claimed']:,}/月（比 {rev['ratio']}x）")
     sys_p = ("あなたはYouTubeチャンネルの再生数の時間的偏りを読むアナリスト。月別中央再生(動画の公開月別)を見て、"
              "(1)再生が過去の資産に偏り直近の新作が伸びていないか、(2)ベンチマークするなら着目すべき時期、を"
              "簡潔に1〜2文の日本語で述べよ。注意: 直近月が低いのは新作の再生蓄積が浅いだけの可能性もあるので断定を避け、"
-             "ピーク期との差が大きい/勝ち筋eraが過去に固まっている場合のみ『過去資産で延命』と判断する。前置き無しで示唆だけ。")
+             "ピーク期との差が大きい/勝ち筋eraが過去に固まっている場合のみ『過去資産で延命』と判断する。"
+             "収益逆算が与えられ申告が逆算を大きく超える(比<0.6)場合は、過去資産のロングテール依存・別収益源・高RPMニッチ等の"
+             "可能性に簡潔に触れてよい（虚偽と断定はしない）。前置き無しで示唆だけ。")
     try:
         cli = anthropic.Anthropic(api_key=akey)
-        r = cli.messages.create(model="claude-sonnet-4-6", max_tokens=220,
+        r = cli.messages.create(model="claude-sonnet-4-6", max_tokens=240,
                                 system=sys_p, messages=[{"role": "user", "content": ctx}])
         return "".join(b.text for b in r.content if b.type == "text").strip() or None
     except Exception as e:
@@ -268,7 +298,7 @@ def _bias_note(monthly: dict, win: list, cliff, sig: dict) -> str | None:
 
 # ── メイン ────────────────────────────────────────────────────────────────────
 
-def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula, insight=None, bias_note=None):
+def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula, insight=None, bias_note=None, rev=None):
     """ダッシュボード表示用に channel_benchmark テーブルへ保存（channel_id 主キー）。"""
     import storage
     conn = storage.init()
@@ -282,11 +312,13 @@ def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula, insight
         conn.execute("ALTER TABLE channel_benchmark ADD COLUMN insight_json TEXT")
     if "bias_note" not in cols:                                      # 再生偏り示唆（軽量）
         conn.execute("ALTER TABLE channel_benchmark ADD COLUMN bias_note TEXT")
+    if "rev_json" not in cols:                                       # 収益逆算（決定論）
+        conn.execute("ALTER TABLE channel_benchmark ADD COLUMN rev_json TEXT")
     tv = [{"id": v["id"], "date": v["date"], "views": v["views"], "title": v["title"]} for v in topv]
     conn.execute("""INSERT OR REPLACE INTO channel_benchmark
         (channel_id, listing_id, win_start, win_end, win_count, cliff,
-         monthly_json, top_videos_json, formula_json, fetched_at, insight_json, bias_note)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", (
+         monthly_json, top_videos_json, formula_json, fetched_at, insight_json, bias_note, rev_json)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
         cid, listing_id,
         win[0]["date"] if win else None, win[-1]["date"] if win else None,
         len(win), cliff,
@@ -295,7 +327,8 @@ def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula, insight
         json.dumps(formula, ensure_ascii=False) if formula is not None else None,
         datetime.now(timezone.utc).isoformat(),
         json.dumps(insight, ensure_ascii=False) if insight is not None else None,
-        bias_note))
+        bias_note,
+        json.dumps(rev, ensure_ascii=False) if rev is not None else None))
     conn.commit()
 
 
@@ -324,9 +357,25 @@ def run(ch: str, top: int = 3, listing_id: str | None = None, deep: bool = False
     for v in topv:
         print(f"  {v['views']:>9,} | {v['date']} | {v['title'][:40]}  ({v['id']})")
 
-    # 再生の時間的偏り示唆（決定論シグナル＋Sonnet一言・約1円）— 軽量の既定インサイト
+    # 収益逆算（決定論・無料）: 申告利益が実再生で物理的に妥当かのレンジ判定。listing_id があれば申告利益を読む
+    rev = None
+    if listing_id:
+        try:
+            import storage as _st
+            _c = _st.init()
+            _r = _c.execute("SELECT profit_avg, profit_recent FROM listings WHERE id=?", (listing_id,)).fetchone()
+            claimed = (_r[0] if _r and _r[0] else (_r[1] if _r else None))
+            rev = _revenue_check(vids, claimed)
+            if rev:
+                f = {"under": "⚠️", "over": "🔼", "ok": "✅"}[rev["flag"]]
+                print(f"--- 収益逆算 {f} ---\n  申告 ¥{rev['claimed']:,}/月 vs 再生逆算 ¥{rev['rev_low']:,}〜¥{rev['rev_high']:,}/月 "
+                      f"（平均月間再生{rev['monthly_views']:,} / 比 {rev['ratio']}x）")
+        except Exception as e:
+            print(f"[warn] 収益逆算スキップ: {e}", file=sys.stderr)
+
+    # 再生の時間的偏り示唆（決定論シグナル＋Sonnet一言・約1円）— 軽量の既定インサイト。収益逆算も食わせて数字に錨を打つ
     sig = _bias_signals(monthly)
-    bias = _bias_note(monthly, win, cliff, sig)
+    bias = _bias_note(monthly, win, cliff, sig, rev)
     if bias:
         print(f"\n--- 再生の偏り示唆 ---\n  {bias}")
 
@@ -350,7 +399,7 @@ def run(ch: str, top: int = 3, listing_id: str | None = None, deep: bool = False
         print("\n（listing_id 未指定 → 勝ち筋era＋偏り示唆のみ保存）")
 
     try:
-        _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula=None, insight=insight, bias_note=bias)
+        _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula=None, insight=insight, bias_note=bias, rev=rev)
     except Exception as e:
         print(f"[warn] ベンチマーク保存失敗: {e}", file=sys.stderr)
     return 0
