@@ -207,11 +207,11 @@ HTML = r"""<!DOCTYPE html>
   .ov-note { color:#6f8298; font-size:14px; margin-top:9px; line-height:1.55; }
   .ov-hi { color:#7fd6a0; } .ov-lo { color:#e2a04a; }
   /* 円/ドーナツグラフ（conic-gradient・ライブラリ不要） */
-  .ov-chart { display:flex; gap:26px; align-items:center; margin:5px 0 12px; }
-  .ov-pie { width:46%; max-width:260px; aspect-ratio:1; height:auto; border-radius:50%; flex:0 0 auto; }
+  .ov-chart { display:flex; gap:40px; align-items:center; margin:5px 0 12px; }
+  .ov-pie { width:44%; max-width:260px; aspect-ratio:1; height:auto; border-radius:50%; flex:0 0 auto; }
   .ov-donut { -webkit-mask:radial-gradient(circle, transparent 54%, #000 55%);
                       mask:radial-gradient(circle, transparent 54%, #000 55%); }
-  .ov-leg { display:flex; flex-direction:column; gap:7px; font-size:16px; color:#aab8c8; }
+  .ov-leg { display:flex; flex-direction:column; gap:8px; font-size:18px; color:#aab8c8; }
   .ov-leg div { white-space:nowrap; }
   .ov-leg i { display:inline-block; width:13px; height:13px; border-radius:3px; margin-right:6px; vertical-align:middle; }
   .ov-leg b { color:#e8eef6; font-weight:700; }
@@ -627,7 +627,7 @@ function renderOverview(rows){
   const reach=fits.filter(v=>v>=4).length, fd=k=>fits.filter(v=>v===k).length;
   H+=_ovSec('fit','能力適合（作れる射程）',
     fits.length?`射程≥4: <span class="ov-hi">${reach}</span> (${_pct(reach,fits.length)}%)`:'評価なし',
-    fits.length?(_chart([{t:'適合5',v:fd(5),c:_RAMP5[0]},{t:'4',v:fd(4),c:_RAMP5[1]},{t:'3',v:fd(3),c:_RAMP5[2]},{t:'2',v:fd(2),c:_RAMP5[3]},{t:'1',v:fd(1),c:_RAMP5[4]}])
+    fits.length?(_chart([{t:'適合5',v:fd(5),c:_RAMP5[0]},{t:'適合4',v:fd(4),c:_RAMP5[1]},{t:'適合3',v:fd(3),c:_RAMP5[2]},{t:'適合2',v:fd(2),c:_RAMP5[3]},{t:'適合1',v:fd(1),c:_RAMP5[4]}])
      +_ovRow('射程 ≥4（作れる）',`<span class="ov-hi">${reach}件 / 評価${fits.length}件 (${_pct(reach,fits.length)}%)</span>`,true)
      +_ovRow('適合 5 / 4',`${fd(5)} / ${fd(4)}`)
      +_ovRow('適合 3 / 2 / 1',`${fd(3)} / ${fd(2)} / ${fd(1)}`)):'<div class="ov-note">評価済みがありません。</div>');
