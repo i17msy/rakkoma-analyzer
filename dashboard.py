@@ -232,7 +232,7 @@ HTML = r"""<!DOCTYPE html>
   </select>
   <select id="sf" onchange="render()">
     <option value="">状態: すべて</option>
-    <option value="募集中" selected>募集中</option>
+    <option value="募集中">募集中</option>
     <option value="__closed">クローズ</option>
     <option value="成約済み">成約済み</option>
     <option value="受付終了">受付終了</option>
@@ -572,7 +572,7 @@ function toggleAllRows(){
 
 // ===== 総合パネル（表示中=フィルタ後の行を集計）=====
 let _lastRows=[];
-let _ovOpen={compose:true,fit:true,yt:true,gap:true,money:true,speed:true};   // 既定で1〜2行目(〜市場の速さ)を開く
+let _ovOpen={compose:true,fit:true,speed:true,match:true,yt:true,quality:true};   // 既定で1〜2行目を開く（新並び順）
 function toggleOverview(){
   const el=document.getElementById('overview'); el.hidden=!el.hidden;
   document.getElementById('ovBtn').textContent=el.hidden?'📊 総合':'📊 総合 ✕';
@@ -615,57 +615,25 @@ function renderOverview(rows){
   const ev=rows.filter(r=>r.evaluation);
   const vc=v=>rows.filter(r=>r.evaluation?.verdict===v).length;
   const buy=vc('買い'), watch=vc('様子見'), pass=vc('見送り'), nev=n-ev.length;
-  let H='';
 
-  // ① 構成
-  H+=_ovSec('compose','構成',`${n}件 · 募${open}/成${sold}/終${ended}`,
-    _chart([{t:'募集',v:open,c:_COPEN},{t:'成約',v:sold,c:_CSOLD},{t:'受付終了',v:ended,c:_CEND}])
-   +_chart([{t:'買い',v:buy,c:_CBUY},{t:'様子見',v:watch,c:_CWATCH},{t:'見送り',v:pass,c:_CPASS},{t:'未評価',v:nev,c:_CNONE}])
-   +_ovRow('状態',`募集 ${open} / 成約 ${sold} / 受付終了 ${ended}`)
-   +_ovRow('判定',`<span class="ov-hi">買 ${buy}</span> · 様 ${watch} · 見 ${pass} · <span class="mut">未 ${nev}</span>`));
-
-  // ② 能力適合（作れる射程）
+  // --- 計算をすべて先に集約（表示順に依存させない）---
+  // 能力適合
   const fits=ev.map(r=>r.evaluation.capability_fit).filter(v=>v!=null);
   const reach=fits.filter(v=>v>=4).length, fd=k=>fits.filter(v=>v===k).length;
-  H+=_ovSec('fit','能力適合（作れる射程）',
-    fits.length?`射程≥4: <span class="ov-hi">${reach}</span> (${_pct(reach,fits.length)}%)`:'評価なし',
-    fits.length?(_chart([{t:'適合5',v:fd(5),c:_RAMP5[0]},{t:'適合4',v:fd(4),c:_RAMP5[1]},{t:'適合3',v:fd(3),c:_RAMP5[2]},{t:'適合2',v:fd(2),c:_RAMP5[3]},{t:'適合1',v:fd(1),c:_RAMP5[4]}])
-     +_ovRow('射程 ≥4（作れる）',`<span class="ov-hi">${reach}件 / 評価${fits.length}件 (${_pct(reach,fits.length)}%)</span>`,true)
-     +_ovRow('適合 5 / 4',`${fd(5)} / ${fd(4)}`)
-     +_ovRow('適合 3 / 2 / 1',`${fd(3)} / ${fd(2)} / ${fd(1)}`)):'<div class="ov-note">評価済みがありません。</div>');
-
-  // ③ YouTube照合カバレッジ
+  // YouTube照合
   const yt=rows.filter(r=>r.candidates&&r.candidates.length);
   const confs=yt.map(r=>r.candidates[0].confidence).filter(v=>v!=null);
   const hi=confs.filter(v=>v>=0.8).length;
   const bench=rows.filter(r=>r.candidates&&r.candidates.some(c=>c.benchmark)).length;
   const cmed=_med(confs);
-  H+=_ovSec('yt','YouTube照合カバレッジ',
-    `照合 ${yt.length}/${n} (${_pct(yt.length,n)}%)${cmed!=null?` · 一致中央 ${Math.round(cmed*100)}%`:''}`,
-    _chart([{t:'照合済',v:yt.length,c:'#6db3f2'},{t:'未照合',v:n-yt.length,c:_CDARK}],true)
-   +_ovRow('照合済み',`<span class="ov-hi">${yt.length}件</span> / ${n}件 (${_pct(yt.length,n)}%)`,true)
-   +_ovRow('一致率 中央値',cmed==null?'–':Math.round(cmed*100)+'%')
-   +_ovRow('高一致 ≥80%',`${hi}件`)
-   +_ovRow('ベンチ取得済み',`${bench}件`));
-
-  // ④ 市場乖離・機会
+  // 市場乖離
   const tgt=rows.filter(r=>(r.flags||[]).some(f=>f.startsWith('交渉'))).length;
   const undervalued=rows.filter(r=>r.status_state==='受付終了'&&r.evaluation&&r.evaluation.overall_score>=2).length;
-  H+=_ovSec('gap','市場乖離・機会',`🎯${tgt} · 割安候補${undervalued}`,
-    _ovRow('🎯 交渉ターゲット（活性）',`<span class="ov-hi">${tgt}件</span>`,true)
-   +_ovRow('高評価×売れ残り（受付終了×総合≥2）',`${undervalued}件`)
-   +`<div class="ov-note">高評価なのに売れず取り下げ＝強気価格の割安交渉余地（本家を超える核心）。</div>`);
-
-  // ⑤ 価格・利益
+  // 価格・利益
   const pmed=_med(rows.map(r=>r.price).filter(v=>v!=null));
   const profmed=_med(rows.map(r=>r.profit).filter(v=>v!=null));
   const pbmed=_med(rows.map(r=>r.metrics?.payback_months_recent).filter(v=>v!=null));
-  H+=_ovSec('money','価格・利益（中央値）',`価格 ${yen(pmed)}`,
-    _ovRow('価格 中央値',yen(pmed),true)
-   +_ovRow('利益/月 中央値',yen(profmed))
-   +_ovRow('回収 中央値',pbmed==null?'–':pbmed+'ヶ月'));
-
-  // ⑥ 市場の速さ・即決ゾーン
+  // 市場の速さ・即決ゾーン
   const sr=rows.filter(r=>r.status_state==='成約済み'&&r.dwell_days!=null);
   let spdT='成約済みなし', spdB='<div class="ov-note">状態=成約済み/すべて で表示されます。</div>';
   if(sr.length){
@@ -683,9 +651,7 @@ function renderOverview(rows){
      +_ovRow('利益 即決↔じっくり',`${yen(fpr)} ↔ ${yen(spr)}`)
      +(toks.length?`<div class="ov-note">即決(≤7日)の頻出ジャンル: ${_tags(toks,6)}</div>`:'');
   }
-  H+=_ovSec('speed','市場の速さ・即決ゾーン',spdT,spdB);
-
-  // ⑦ 判定×成約
+  // 判定×成約
   const se=sr.filter(r=>r.evaluation);
   let mT='成約データなし', mB='<div class="ov-note">状態=成約済み/すべて で表示されます。</div>';
   if(se.length){
@@ -697,18 +663,43 @@ function renderOverview(rows){
      +_ovRow('見送り',`<span class="ov-lo">${sp2}件 (${_pct(sp2,se.length)}%)</span>`)
      +`<div class="ov-note">市場が買った案件を我々はどう判定していたか（総合≠市場の検証）。</div>`;
   }
-  H+=_ovSec('match','判定 × 成約',mT,mB);
-
-  // ⑧ リスク/実績フラグ分布
+  // リスク/実績フラグ分布
   const ft={}; rows.forEach(r=>(r.flags||[]).forEach(f=>{ ft[f]=(ft[f]||0)+1; }));
   const fl=Object.entries(ft).sort((a,b)=>b[1]-a[1]);
-  H+=_ovSec('flags','リスク/実績フラグ分布',
-    fl.length?`${esc(fl[0][0])} ${fl[0][1]}${fl.length>1?` 他${fl.length-1}種`:''}`:'フラグなし',
-    fl.length?_tags(fl,14):'<div class="ov-note">フラグはありません。</div>');
-
-  // ⑨ データ品質・カバレッジ
+  // データ品質
   const series=rows.filter(r=>r.metrics&&r.metrics.monetized_months!=null).length;
   const ages=rows.map(r=>r.data_age_months).filter(v=>v!=null);
+  // 制作様式
+  const at=_toks(rows);
+
+  // --- 表示順（指定）---
+  let H='';
+  // 1 構成
+  H+=_ovSec('compose','構成',`${n}件 · 募${open}/成${sold}/終${ended}`,
+    _chart([{t:'募集',v:open,c:_COPEN},{t:'成約',v:sold,c:_CSOLD},{t:'受付終了',v:ended,c:_CEND}])
+   +_chart([{t:'買い',v:buy,c:_CBUY},{t:'様子見',v:watch,c:_CWATCH},{t:'見送り',v:pass,c:_CPASS},{t:'未評価',v:nev,c:_CNONE}])
+   +_ovRow('状態',`募集 ${open} / 成約 ${sold} / 受付終了 ${ended}`)
+   +_ovRow('判定',`<span class="ov-hi">買 ${buy}</span> · 様 ${watch} · 見 ${pass} · <span class="mut">未 ${nev}</span>`));
+  // 2 能力適合
+  H+=_ovSec('fit','能力適合（作れる射程）',
+    fits.length?`射程≥4: <span class="ov-hi">${reach}</span> (${_pct(reach,fits.length)}%)`:'評価なし',
+    fits.length?(_chart([{t:'適合5',v:fd(5),c:_RAMP5[0]},{t:'適合4',v:fd(4),c:_RAMP5[1]},{t:'適合3',v:fd(3),c:_RAMP5[2]},{t:'適合2',v:fd(2),c:_RAMP5[3]},{t:'適合1',v:fd(1),c:_RAMP5[4]}])
+     +_ovRow('射程 ≥4（作れる）',`<span class="ov-hi">${reach}件 / 評価${fits.length}件 (${_pct(reach,fits.length)}%)</span>`,true)
+     +_ovRow('適合 5 / 4',`${fd(5)} / ${fd(4)}`)
+     +_ovRow('適合 3 / 2 / 1',`${fd(3)} / ${fd(2)} / ${fd(1)}`)):'<div class="ov-note">評価済みがありません。</div>');
+  // 3 市場の速さ・即決ゾーン
+  H+=_ovSec('speed','市場の速さ・即決ゾーン',spdT,spdB);
+  // 4 判定×成約
+  H+=_ovSec('match','判定 × 成約',mT,mB);
+  // 5 YouTube照合カバレッジ
+  H+=_ovSec('yt','YouTube照合カバレッジ',
+    `照合 ${yt.length}/${n} (${_pct(yt.length,n)}%)${cmed!=null?` · 一致中央 ${Math.round(cmed*100)}%`:''}`,
+    _chart([{t:'照合済',v:yt.length,c:'#6db3f2'},{t:'未照合',v:n-yt.length,c:_CDARK}],true)
+   +_ovRow('照合済み',`<span class="ov-hi">${yt.length}件</span> / ${n}件 (${_pct(yt.length,n)}%)`,true)
+   +_ovRow('一致率 中央値',cmed==null?'–':Math.round(cmed*100)+'%')
+   +_ovRow('高一致 ≥80%',`${hi}件`)
+   +_ovRow('ベンチ取得済み',`${bench}件`));
+  // 6 データ品質・カバレッジ
   H+=_ovSec('quality','データ品質・カバレッジ',`評価 ${_pct(ev.length,n)}% · 系列 ${_pct(series,n)}%`,
     _chart([{t:'評価済',v:ev.length,c:_CSOLD},{t:'未評価',v:n-ev.length,c:_CDARK}],true)
    +_chart([{t:'系列あり',v:series,c:'#6db3f2'},{t:'系列なし',v:n-series,c:_CDARK}],true)
@@ -716,9 +707,21 @@ function renderOverview(rows){
    +_ovRow('収益系列あり',`${series}件 (${_pct(series,n)}%)`)
    +_ovRow('データ鮮度 中央値',ages.length?_med(ages)+'ヶ月前':'–')
    +`<div class="ov-note">カバレッジ偏り・系列欠落・鮮度を把握し集計を過信しないため。</div>`);
-
-  // ⑩ 制作様式（頻出ジャンル語）
-  const at=_toks(rows);
+  // 7 市場乖離・機会
+  H+=_ovSec('gap','市場乖離・機会',`🎯${tgt} · 割安候補${undervalued}`,
+    _ovRow('🎯 交渉ターゲット（活性）',`<span class="ov-hi">${tgt}件</span>`,true)
+   +_ovRow('高評価×売れ残り（受付終了×総合≥2）',`${undervalued}件`)
+   +`<div class="ov-note">高評価なのに売れず取り下げ＝強気価格の割安交渉余地（本家を超える核心）。</div>`);
+  // 8 価格・利益
+  H+=_ovSec('money','価格・利益（中央値）',`価格 ${yen(pmed)}`,
+    _ovRow('価格 中央値',yen(pmed),true)
+   +_ovRow('利益/月 中央値',yen(profmed))
+   +_ovRow('回収 中央値',pbmed==null?'–':pbmed+'ヶ月'));
+  // 9 リスク/実績フラグ分布
+  H+=_ovSec('flags','リスク/実績フラグ分布',
+    fl.length?`${esc(fl[0][0])} ${fl[0][1]}${fl.length>1?` 他${fl.length-1}種`:''}`:'フラグなし',
+    fl.length?_tags(fl,14):'<div class="ov-note">フラグはありません。</div>');
+  // 10 制作様式（頻出ジャンル語）
   H+=_ovSec('style','制作様式（頻出ジャンル語）',
     at.length?`${esc(at[0][0])} ${at[0][1]} 他`:'語なし',
     at.length?_tags(at,16)+`<div class="ov-note">勝ち筋はトピックでなく制作様式（AI/顔なし/まとめ…）に出る。</div>`:'<div class="ov-note">評価済みジャンルがありません。</div>');
