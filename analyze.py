@@ -185,6 +185,8 @@ def main() -> None:
     ap.add_argument("--all", action="store_true", help="評価済みも再評価する")
     ap.add_argument("--id", help="特定IDのみ評価")
     ap.add_argument("--state", choices=["募集中", "成約済み", "受付終了"], help="ステータスで絞る")
+    ap.add_argument("--closed", action="store_true", help="クローズ(成約済み+受付終了)を対象")
+    ap.add_argument("--asset", help="譲渡物種別の部分一致で絞る（例: YouTube）")
     ap.add_argument("--limit", type=int, help="先頭N件のみ（利益降順）")
     args = ap.parse_args()
 
@@ -194,7 +196,14 @@ def main() -> None:
     client = anthropic.Anthropic(api_key=key)
 
     conn = DB.init()
-    items = DB.listings_for_eval(conn, only_id=args.id, redo=args.all, state=args.state, limit=args.limit)
+    if args.closed:
+        items = (DB.listings_for_eval(conn, redo=args.all, state="成約済み", asset=args.asset)
+                 + DB.listings_for_eval(conn, redo=args.all, state="受付終了", asset=args.asset))
+        if args.limit:
+            items = items[:args.limit]
+    else:
+        items = DB.listings_for_eval(conn, only_id=args.id, redo=args.all, state=args.state,
+                                     limit=args.limit, asset=args.asset)
     print(f"評価対象: {len(items)} 件\n")
 
     n = in_tok = out_tok = 0

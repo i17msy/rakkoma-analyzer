@@ -284,13 +284,15 @@ def fetch_dashboard_rows(conn: sqlite3.Connection) -> list[dict]:
 
 def listings_for_eval(conn: sqlite3.Connection, only_id: str | None = None,
                        redo: bool = False, state: str | None = None,
-                       limit: int | None = None) -> list[tuple[int, dict]]:
-    """評価対象の (id, detail) を返す。既定は未評価のみ。"""
+                       limit: int | None = None, asset: str | None = None) -> list[tuple[int, dict]]:
+    """評価対象の (id, detail) を返す。既定は未評価のみ。asset は譲渡物種別の部分一致。"""
     where, params = [], []
     if only_id:
         where.append("id = ?"); params.append(int(only_id))
     if state:
         where.append("status_state = ?"); params.append(state)
+    if asset:
+        where.append("asset_type LIKE ?"); params.append(f"%{asset}%")
     if not redo and not only_id:
         where.append("id NOT IN (SELECT listing_id FROM evaluations)")
     sql = "SELECT id, raw_json FROM listings"
