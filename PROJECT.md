@@ -246,7 +246,8 @@ Cloudflare R2（S3互換・**エグレス無料**）を専用バケット `rakko
 ├── dashboard.py             # 静的HTMLダッシュボード生成（YouTube候補セクション込）
 ├── r2.py                    # R2連携（死活ハートビート＋日次DBバックアップ）
 ├── match.py                 # YouTube候補照合（案件→近似ch・--benchmark で連結）
-├── analyze_channel.py       # ベンチマーク抽出（再生数で勝ち筋era → Gemini formula）
+├── analyze_channel.py       # ベンチマーク抽出（勝ち筋era＋偏り示唆＋収益逆算・--urls で勝ちera動画URL書出）
+├── bookmarks.py             # ★ブックマーク永続化（bookmarks.json ↔ DB bookmarksテーブル）
 ├── Dockerfile               # 専用イメージ（python:3.12-slim ＋ requests/anthropic/boto3）
 ├── run_container_rakkoma.sh # rakkoma:latest を自動ビルドして常駐（--restart unless-stopped）
 └── data/
@@ -344,6 +345,14 @@ python3 dashboard.py                       # ダッシュボード再生成
   quota枯渇で自動中断→翌日継続（429の "per day" 文言を即中断扱い＋クエリ間1秒待ち＋429バックオフ）。
 - ✅ ダッシュ細部: 主ジャンル1語タグ化（フルはtooltip/検索に温存）/ 種別フィルタ（YouTube既定・すべて・その他）/ 価格レンジフィルタ /
   列ソート3状態化（降順→昇順→ソート無し）/ 追随する案件名バーに選択行の主要列(状態/適合/総合/判定/価格/回収・色踏襲)を併記。
+- ✅ **★ブックマーク（localStorage優先・サーバ不要・再生成耐性）**: 展開欄の案件名左に☆トグル→localStorageに案件ID保存。
+  フィルタ「★のみ」・件数表示・⬇でbookmarks.json書き出し。**永続化＝`bookmarks.py`**(import/list/export/rm)で json↔DB(bookmarksテーブル)。
+  dashboard.py が生成時にDBの★を `_dbBookmarks` として注入。モデル＝**localStorageが正／DBは端末初回のみ種＋可搬・バックアップ・新端末ブートストラップ**
+  （外したら残る・import明示時のみDB更新＝普段はDB放置でOK）。R2日次バックアップでDBごと保全される。
+- 📌 **創発ユースパターン: リクベース候補検索＝横展開ニッチ偵察**（2026-06-30）: モデルch/案件IDを種に投げると
+  「ニッチの競争風景＋飽和度・勝ち筋formula・再現射程」が即返る＝買い手評価より広い"自分のch展開の斥候"。**候補の密集度＝飽和シグナル**
+  （例: 大谷海外反応が登録者7000前後で5ch密集＝crowded／スカスカ＝recall律速 or ブルーオーシャン）。今日のスポーツ系4件(野球/サッカー/格闘技/ショート)で
+  「申告が収益逆算を大きく超える(0.06〜0.16x)＋崖あり＝過去バズ＋別収益源で申告が膨らむ」共通パターンを確認。★ブックマークと組み合わせて回す。
 
 ## 傾向分析（全534件評価 / 2026-06-29）
 
