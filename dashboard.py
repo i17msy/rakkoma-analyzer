@@ -191,28 +191,28 @@ HTML = r"""<!DOCTYPE html>
   .ov-sec { border:1px solid #1a2839; border-radius:8px; margin:0; background:#0b1320; overflow:hidden; }
   .ov-sec-h { display:flex; align-items:baseline; gap:9px; padding:9px 12px; cursor:pointer; user-select:none; }
   .ov-sec-h:hover { background:#101d2c; }
-  .ov-chev { color:#5f7da0; font-size:12px; width:12px; }
-  .ov-sec-t { font-size:15px; font-weight:700; color:#cdddf0; }
-  .ov-sec-teaser { margin-left:auto; color:#8aa3bd; font-size:13.5px; text-align:right; }
+  .ov-chev { color:#5f7da0; font-size:14px; width:14px; }
+  .ov-sec-t { font-size:17.5px; font-weight:700; color:#cdddf0; }
+  .ov-sec-teaser { margin-left:auto; color:#8aa3bd; font-size:15px; text-align:right; }
   .ov-sec.open .ov-sec-h { border-bottom:1px solid #16263a; }
-  .ov-sec-b { padding:6px 14px 11px; }
+  .ov-sec-b { padding:8px 16px 13px; }
   .ov-row { display:flex; justify-content:space-between; align-items:baseline; gap:10px;
-            padding:4px 0; font-size:15px; border-top:1px solid #121e2b; }
+            padding:5px 0; font-size:17px; border-top:1px solid #121e2b; }
   .ov-row:first-child { border-top:none; }
-  .ov-row .k { color:#7f93a8; font-size:13.5px; }
-  .ov-big { font-size:20px; font-weight:700; color:#7fd6a0; }
+  .ov-row .k { color:#7f93a8; font-size:15px; }
+  .ov-big { font-size:24px; font-weight:700; color:#7fd6a0; }
   .ov-tag { display:inline-block; background:#15273a; border:1px solid #24405c; color:#bcd4ee;
-            border-radius:11px; padding:1px 9px; margin:2px 4px 2px 0; font-size:13px; }
-  .ov-note { color:#6f8298; font-size:12.5px; margin-top:8px; line-height:1.5; }
+            border-radius:11px; padding:2px 11px; margin:3px 5px 3px 0; font-size:15px; }
+  .ov-note { color:#6f8298; font-size:14px; margin-top:9px; line-height:1.55; }
   .ov-hi { color:#7fd6a0; } .ov-lo { color:#e2a04a; }
   /* 円/ドーナツグラフ（conic-gradient・ライブラリ不要） */
-  .ov-chart { display:flex; gap:13px; align-items:center; margin:3px 0 9px; }
-  .ov-pie { display:inline-block; width:58px; height:58px; border-radius:50%; flex:0 0 auto; }
+  .ov-chart { display:flex; gap:18px; align-items:center; margin:5px 0 12px; }
+  .ov-pie { display:inline-block; width:92px; height:92px; border-radius:50%; flex:0 0 auto; }
   .ov-donut { -webkit-mask:radial-gradient(circle, transparent 54%, #000 55%);
                       mask:radial-gradient(circle, transparent 54%, #000 55%); }
-  .ov-leg { display:flex; flex-wrap:wrap; gap:3px 13px; font-size:13px; color:#aab8c8; }
+  .ov-leg { display:flex; flex-wrap:wrap; gap:5px 16px; font-size:16px; color:#aab8c8; }
   .ov-leg div { white-space:nowrap; }
-  .ov-leg i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+  .ov-leg i { display:inline-block; width:13px; height:13px; border-radius:3px; margin-right:6px; vertical-align:middle; }
   .ov-leg b { color:#e8eef6; font-weight:700; }
 </style>
 </head>
