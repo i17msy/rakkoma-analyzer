@@ -186,8 +186,9 @@ HTML = r"""<!DOCTYPE html>
   /* 総合パネル（アコーディオン・2列グリッド） */
   .overview { background:#0e1722; border:1px solid #1d2c3d; border-radius:10px;
               margin:10px 4px 14px; padding:8px 10px; }
-  .ov-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:7px 10px; align-items:start; }
-  @media (max-width:860px){ .ov-grid2 { grid-template-columns:1fr; } }
+  .ov-grid2 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px 10px; align-items:start; }
+  @media (max-width:1200px){ .ov-grid2 { grid-template-columns:1fr 1fr; } }
+  @media (max-width:760px){ .ov-grid2 { grid-template-columns:1fr; } }
   .ov-sec { border:1px solid #1a2839; border-radius:8px; margin:0; background:#0b1320; overflow:hidden; }
   .ov-sec-h { display:flex; align-items:baseline; gap:9px; padding:9px 12px; cursor:pointer; user-select:none; }
   .ov-sec-h:hover { background:#101d2c; }
