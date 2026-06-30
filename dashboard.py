@@ -183,10 +183,12 @@ HTML = r"""<!DOCTYPE html>
   .mut { color:var(--mut); }
   .hidden { display:none; }
   .axis { display:inline-block; min-width:42px; }
-  /* 総合パネル（アコーディオン） */
+  /* 総合パネル（アコーディオン・2列グリッド） */
   .overview { background:#0e1722; border:1px solid #1d2c3d; border-radius:10px;
               margin:10px 4px 14px; padding:8px 10px; }
-  .ov-sec { border:1px solid #1a2839; border-radius:8px; margin:6px 0; background:#0b1320; overflow:hidden; }
+  .ov-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:7px 10px; align-items:start; }
+  @media (max-width:860px){ .ov-grid2 { grid-template-columns:1fr; } }
+  .ov-sec { border:1px solid #1a2839; border-radius:8px; margin:0; background:#0b1320; overflow:hidden; }
   .ov-sec-h { display:flex; align-items:baseline; gap:9px; padding:9px 12px; cursor:pointer; user-select:none; }
   .ov-sec-h:hover { background:#101d2c; }
   .ov-chev { color:#5f7da0; font-size:12px; width:12px; }
@@ -203,6 +205,15 @@ HTML = r"""<!DOCTYPE html>
             border-radius:11px; padding:1px 9px; margin:2px 4px 2px 0; font-size:13px; }
   .ov-note { color:#6f8298; font-size:12.5px; margin-top:8px; line-height:1.5; }
   .ov-hi { color:#7fd6a0; } .ov-lo { color:#e2a04a; }
+  /* 円/ドーナツグラフ（conic-gradient・ライブラリ不要） */
+  .ov-chart { display:flex; gap:13px; align-items:center; margin:3px 0 9px; }
+  .ov-pie { display:inline-block; width:58px; height:58px; border-radius:50%; flex:0 0 auto; }
+  .ov-donut { -webkit-mask:radial-gradient(circle, transparent 54%, #000 55%);
+                      mask:radial-gradient(circle, transparent 54%, #000 55%); }
+  .ov-leg { display:flex; flex-wrap:wrap; gap:3px 13px; font-size:13px; color:#aab8c8; }
+  .ov-leg div { white-space:nowrap; }
+  .ov-leg i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+  .ov-leg b { color:#e8eef6; font-weight:700; }
 </style>
 </head>
 <body>
@@ -581,6 +592,12 @@ function _toks(rows){ const t={};
     g.split(/[\/、・,\s]+/).forEach(w=>{ w=w.trim(); if(w.length>=2) t[w]=(t[w]||0)+1; }); });
   return Object.entries(t).sort((a,b)=>b[1]-a[1]); }
 function _tags(arr,n){ return arr.slice(0,n).map(t=>`<span class="ov-tag">${esc(t[0])} ${t[1]}</span>`).join(''); }
+function _pie(segs,donut){ const tot=segs.reduce((s,x)=>s+(x.v||0),0); if(!tot) return '';
+  let acc=0; const stops=segs.map(x=>{ const a=acc/tot*100, b=(acc+(x.v||0))/tot*100; acc+=(x.v||0); return `${x.c} ${a}% ${b}%`; });
+  return `<span class="ov-pie${donut?' ov-donut':''}" style="background:conic-gradient(${stops.join(',')})"></span>`; }
+function _chart(segs,donut){ const tot=segs.reduce((s,x)=>s+(x.v||0),0); if(!tot) return '';
+  const leg=segs.filter(x=>x.v>0).map(x=>`<div><i style="background:${x.c}"></i>${esc(x.t)} <b>${x.v}</b> <span class="k">${_pct(x.v,tot)}%</span></div>`).join('');
+  return `<div class="ov-chart">${_pie(segs,donut)}<div class="ov-leg">${leg}</div></div>`; }
 
 function renderOverview(rows){
   const el=document.getElementById('overview'); if(el.hidden) return;
@@ -594,7 +611,9 @@ function renderOverview(rows){
 
   // ① 構成
   H+=_ovSec('compose','構成',`${n}件 · 募${open}/成${sold}/終${ended}`,
-    _ovRow('状態',`募集 ${open} / 成約 ${sold} / 受付終了 ${ended}`)
+    _chart([{t:'募集',v:open,c:'#4a90d9'},{t:'成約',v:sold,c:'#7fd6a0'},{t:'受付終了',v:ended,c:'#8a93a0'}])
+   +_chart([{t:'買い',v:buy,c:'#7fd6a0'},{t:'様子見',v:watch,c:'#e2c04a'},{t:'見送り',v:pass,c:'#9aa6b2'},{t:'未評価',v:nev,c:'#34404e'}])
+   +_ovRow('状態',`募集 ${open} / 成約 ${sold} / 受付終了 ${ended}`)
    +_ovRow('判定',`<span class="ov-hi">買 ${buy}</span> · 様 ${watch} · 見 ${pass} · <span class="mut">未 ${nev}</span>`));
 
   // ② 能力適合（作れる射程）
@@ -602,7 +621,8 @@ function renderOverview(rows){
   const reach=fits.filter(v=>v>=4).length, fd=k=>fits.filter(v=>v===k).length;
   H+=_ovSec('fit','能力適合（作れる射程）',
     fits.length?`射程≥4: <span class="ov-hi">${reach}</span> (${_pct(reach,fits.length)}%)`:'評価なし',
-    fits.length?(_ovRow('射程 ≥4（作れる）',`<span class="ov-hi">${reach}件 / 評価${fits.length}件 (${_pct(reach,fits.length)}%)</span>`,true)
+    fits.length?(_chart([{t:'適合5',v:fd(5),c:'#7fd6a0'},{t:'4',v:fd(4),c:'#a7d98a'},{t:'3',v:fd(3),c:'#e2c04a'},{t:'2',v:fd(2),c:'#e0975a'},{t:'1',v:fd(1),c:'#c75b5b'}])
+     +_ovRow('射程 ≥4（作れる）',`<span class="ov-hi">${reach}件 / 評価${fits.length}件 (${_pct(reach,fits.length)}%)</span>`,true)
      +_ovRow('適合 5 / 4',`${fd(5)} / ${fd(4)}`)
      +_ovRow('適合 3 / 2 / 1',`${fd(3)} / ${fd(2)} / ${fd(1)}`)):'<div class="ov-note">評価済みがありません。</div>');
 
@@ -614,7 +634,8 @@ function renderOverview(rows){
   const cmed=_med(confs);
   H+=_ovSec('yt','YouTube照合カバレッジ',
     `照合 ${yt.length}/${n} (${_pct(yt.length,n)}%)${cmed!=null?` · 一致中央 ${Math.round(cmed*100)}%`:''}`,
-    _ovRow('照合済み',`<span class="ov-hi">${yt.length}件</span> / ${n}件 (${_pct(yt.length,n)}%)`,true)
+    _chart([{t:'照合済',v:yt.length,c:'#6db3f2'},{t:'未照合',v:n-yt.length,c:'#22303f'}],true)
+   +_ovRow('照合済み',`<span class="ov-hi">${yt.length}件</span> / ${n}件 (${_pct(yt.length,n)}%)`,true)
    +_ovRow('一致率 中央値',cmed==null?'–':Math.round(cmed*100)+'%')
    +_ovRow('高一致 ≥80%',`${hi}件`)
    +_ovRow('ベンチ取得済み',`${bench}件`));
@@ -646,7 +667,8 @@ function renderOverview(rows){
     const fpr=_med(fast.map(r=>r.profit).filter(v=>v!=null)), spr=_med(slow.map(r=>r.profit).filter(v=>v!=null));
     const toks=_toks(fast);
     spdT=`滞留中央 ${_med(dw)}日 · 即決${_pct(fast.length,sr.length)}%`;
-    spdB=_ovRow('滞留 中央値',_med(dw)+'日',true)
+    spdB=_chart([{t:'≤7日',v:fast.length,c:'#7fd6a0'},{t:'8-30',v:w30.length-fast.length,c:'#a7d98a'},{t:'31-90',v:w90.length-w30.length,c:'#e2c04a'},{t:'>90',v:sr.length-w90.length,c:'#c75b5b'}])
+     +_ovRow('滞留 中央値',_med(dw)+'日',true)
      +_ovRow('即決 ≤7日',`<span class="ov-hi">${fast.length}件 (${_pct(fast.length,sr.length)}%)</span>`)
      +_ovRow('≤30日 / ≤90日',`${_pct(w30.length,sr.length)}% / ${_pct(w90.length,sr.length)}%`)
      +_ovRow('価格 即決↔じっくり',`${yen(fp)} ↔ ${yen(sp)}`)
@@ -661,7 +683,8 @@ function renderOverview(rows){
   if(se.length){
     const sb=se.filter(r=>r.evaluation.verdict==='買い').length, sw=se.filter(r=>r.evaluation.verdict==='様子見').length, sp2=se.filter(r=>r.evaluation.verdict==='見送り').length;
     mT=`買い${_pct(sb,se.length)}%（成約${se.length}件）`;
-    mB=_ovRow('買い',`<span class="ov-hi">${sb}件 (${_pct(sb,se.length)}%)</span>`)
+    mB=_chart([{t:'買い',v:sb,c:'#7fd6a0'},{t:'様子見',v:sw,c:'#e2c04a'},{t:'見送り',v:sp2,c:'#9aa6b2'}])
+     +_ovRow('買い',`<span class="ov-hi">${sb}件 (${_pct(sb,se.length)}%)</span>`)
      +_ovRow('様子見',`${sw}件 (${_pct(sw,se.length)}%)`)
      +_ovRow('見送り',`<span class="ov-lo">${sp2}件 (${_pct(sp2,se.length)}%)</span>`)
      +`<div class="ov-note">市場が買った案件を我々はどう判定していたか（総合≠市場の検証）。</div>`;
@@ -679,7 +702,9 @@ function renderOverview(rows){
   const series=rows.filter(r=>r.metrics&&r.metrics.monetized_months!=null).length;
   const ages=rows.map(r=>r.data_age_months).filter(v=>v!=null);
   H+=_ovSec('quality','データ品質・カバレッジ',`評価 ${_pct(ev.length,n)}% · 系列 ${_pct(series,n)}%`,
-    _ovRow('評価済み',`${ev.length}件 / ${n}件 (${_pct(ev.length,n)}%)`,true)
+    _chart([{t:'評価済',v:ev.length,c:'#7fd6a0'},{t:'未評価',v:n-ev.length,c:'#22303f'}],true)
+   +_chart([{t:'系列あり',v:series,c:'#6db3f2'},{t:'系列なし',v:n-series,c:'#22303f'}],true)
+   +_ovRow('評価済み',`${ev.length}件 / ${n}件 (${_pct(ev.length,n)}%)`,true)
    +_ovRow('収益系列あり',`${series}件 (${_pct(series,n)}%)`)
    +_ovRow('データ鮮度 中央値',ages.length?_med(ages)+'ヶ月前':'–')
    +`<div class="ov-note">カバレッジ偏り・系列欠落・鮮度を把握し集計を過信しないため。</div>`);
@@ -690,7 +715,7 @@ function renderOverview(rows){
     at.length?`${esc(at[0][0])} ${at[0][1]} 他`:'語なし',
     at.length?_tags(at,16)+`<div class="ov-note">勝ち筋はトピックでなく制作様式（AI/顔なし/まとめ…）に出る。</div>`:'<div class="ov-note">評価済みジャンルがありません。</div>');
 
-  el.innerHTML=H;
+  el.innerHTML=`<div class="ov-grid2">${H}</div>`;
 }
 
 render();
