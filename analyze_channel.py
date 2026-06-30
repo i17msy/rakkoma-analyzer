@@ -299,7 +299,7 @@ def _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula, insight
     conn.commit()
 
 
-def run(ch: str, top: int = 3, listing_id: str | None = None) -> int:
+def run(ch: str, top: int = 3, listing_id: str | None = None, deep: bool = False) -> int:
     ykey = _key("YOUTUBE_API_KEY")
     if not ykey:
         print("YOUTUBE_API_KEY 未設定（env か ~/.bashrc）")
@@ -332,8 +332,9 @@ def run(ch: str, top: int = 3, listing_id: str | None = None) -> int:
 
     # 掘り下げ＝Sonnet 再解釈インサイト（ラッコ↔YouTube実データを両方ファクトとして再解釈）
     # ※Gemini動画formula抽出は将来の「本気でレシピ化」段階のオプションに格下げ（今は呼ばない）
+    # 重いSonnet再解釈レポートは既定OFF（--deep 指定時のみ・約$0.022）。既定は偏り示唆(約1円)まで
     insight = None
-    if listing_id:
+    if listing_id and deep:
         print(f"\n--- Sonnet 再解釈インサイト（ラッコ申告 × YouTube実データ・両方ファクト）---")
         insight = _sonnet_insight(listing_id, ykey, cid, vids, win, cliff)
         if insight:
@@ -343,8 +344,10 @@ def run(ch: str, top: int = 3, listing_id: str | None = None) -> int:
                 for p in s.get("points", []):
                     print(f"  ・{p}")
             print("\n◆ VERDICT:", insight.get("verdict", ""))
+    elif listing_id:
+        print("\n（再解釈レポートは既定OFF — 偏り示唆のみ保存。--deep で生成）")
     else:
-        print("\n（listing_id 未指定 → 再解釈インサイトはスキップ・勝ち筋eraのみ保存）")
+        print("\n（listing_id 未指定 → 勝ち筋era＋偏り示唆のみ保存）")
 
     try:
         _save_benchmark(cid, listing_id, win, cliff, monthly, topv, formula=None, insight=insight, bias_note=bias)
@@ -358,10 +361,14 @@ def main():
     top = 3
     if "--top" in sys.argv:
         top = int(sys.argv[sys.argv.index("--top") + 1])
+    listing_id = None
+    if "--listing" in sys.argv:
+        listing_id = sys.argv[sys.argv.index("--listing") + 1]
+    deep = "--deep" in sys.argv          # 重い再解釈レポートを生成（既定OFF・約$0.022）
     if not args:
-        print("使い方: python3 analyze_channel.py <channelId|@handle> [--top 3]")
+        print("使い方: python3 analyze_channel.py <channelId|@handle> [--top 3] [--listing <案件ID>] [--deep]")
         sys.exit(2)
-    sys.exit(run(args[0], top))
+    sys.exit(run(args[0], top, listing_id=listing_id, deep=deep))
 
 
 if __name__ == "__main__":

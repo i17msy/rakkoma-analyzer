@@ -250,7 +250,7 @@ def _save(conn, lid, scored, key):
 
 # ── メイン ────────────────────────────────────────────────────────────────────
 
-def run(lid: str, n: int = 5, benchmark: bool = False, regen: bool = True) -> int:
+def run(lid: str, n: int = 5, benchmark: bool = False, regen: bool = True, deep: bool = False) -> int:
     key = _api_key()
     if not key:
         print("YT_API_KEY 未設定（env か data/yt_api_key）。READMEの手順でAPIキーを用意してください。")
@@ -299,11 +299,11 @@ def run(lid: str, n: int = 5, benchmark: bool = False, regen: bool = True) -> in
     if benchmark and scored:
         top = scored[0][0]
         print(f"\n{'='*64}")
-        print(f"▼ 筆頭候補「{top['title']}」を自動ベンチマーク抽出（再生数→formula）")
-        print(f"  ※ 筆頭が誤りなら: python3 analyze_channel.py <正しいchID> で再実行")
+        print(f"▼ 筆頭候補「{top['title']}」を自動ベンチマーク抽出（勝ち筋era＋偏り示唆{'＋再解釈レポート' if deep else ''}）")
+        print(f"  ※ 筆頭が誤りなら: python3 analyze_channel.py <正しいchID> --listing {lid}{' --deep' if deep else ''} で再実行")
         print(f"{'='*64}")
         import analyze_channel
-        analyze_channel.run(top["id"], top=3, listing_id=lid)
+        analyze_channel.run(top["id"], top=3, listing_id=lid, deep=deep)
 
     # 候補保存後にダッシュボードを再生成（照合→即ダッシュ反映＝一気通貫）
     # ※バッチ時は regen=False（最後に1回だけまとめて再生成する）
@@ -360,10 +360,11 @@ def main():
     if "--n" in sys.argv:
         n = int(sys.argv[sys.argv.index("--n") + 1])
     benchmark = "--benchmark" in sys.argv
+    deep = "--deep" in sys.argv          # 重い再解釈レポートも生成（既定OFF・約$0.022）
     if not args:
-        print("使い方: python3 match.py <案件ID> [--n 5] [--benchmark]  /  python3 match.py --batch [--limit 19]")
+        print("使い方: python3 match.py <案件ID> [--n 5] [--benchmark] [--deep]  /  python3 match.py --batch [--limit 19]")
         sys.exit(2)
-    sys.exit(run(args[0], n, benchmark=benchmark))
+    sys.exit(run(args[0], n, benchmark=benchmark, deep=deep))
 
 
 if __name__ == "__main__":
