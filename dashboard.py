@@ -128,7 +128,8 @@ HTML = r"""<!DOCTYPE html>
   .genre { color:var(--mut); }
   .bmstar { cursor:pointer; color:#56657a; margin-right:8px; font-size:18px; user-select:none; }
   .bmstar:hover { color:#f4d03f; } .bmstar.on { color:#f4d03f; }
-  .dbmstar { font-size:26px; margin-right:11px; vertical-align:middle; }
+  .dttop { display:flex; align-items:center; gap:11px; }
+  .dbmstar { font-size:26px; line-height:1; flex:0 0 auto; }
   .gtag { display:inline-block; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
           vertical-align:middle; background:#16212e; border:1px solid #294056; color:#aecbe2;
           border-radius:11px; padding:1px 10px; font-size:13.5px; }
@@ -483,7 +484,7 @@ function detailRow(r,span){
     : '';
   return `<tr class="detail hidden"><td colspan="${span}"><div class="inner">
     <button class="closeBtn" onclick="closeDetail(event,this)" title="閉じる">×</button>
-    <div class="full dtitlebar"><span class="bmstar dbmstar${isBm(r.id)?' on':''}" onclick="bmToggle('${r.id}',event)" title="ブックマーク">${isBm(r.id)?'★':'☆'}</span><a href="${r.url||'#'}" target="_blank" rel="noopener" class="dtitle">${esc(r.title||'')}</a>
+    <div class="full dtitlebar"><div class="dttop"><span class="bmstar dbmstar${isBm(r.id)?' on':''}" onclick="bmToggle('${r.id}',event)" title="ブックマーク">${isBm(r.id)?'★':'☆'}</span><a href="${r.url||'#'}" target="_blank" rel="noopener" class="dtitle">${esc(r.title||'')}</a></div>
       <div class="drecap">${stPill(r.status_state)}`
       +(e?.capability_fit!=null?` <span class="rc">適合<b class="${sCls(e.capability_fit,5)}">${e.capability_fit}</b></span>`:'')
       +(e?.overall_score!=null?` <span class="rc">総合<b class="${sCls(e.overall_score,5)}">${e.overall_score}</b></span>`:'')
@@ -799,7 +800,12 @@ function renderOverview(rows){
 }
 
 // ===== ★ブックマーク（localStorage・サーバ不要・再生成耐性あり）=====
-let _bm = new Set([...(()=>{ try{ return JSON.parse(localStorage.getItem('rakkoma_bookmarks')||'[]'); }catch(e){ return []; } })(), ...(_dbBookmarks||[])].map(String));
+// localStorage が正。DBの★は「この端末で初回(=localStorage未設定)のみ」種にする＝外したら残る・端末ローカルが効く
+let _bm;
+{ let ls=null; try{ ls=JSON.parse(localStorage.getItem('rakkoma_bookmarks')||'null'); }catch(e){}
+  if(ls===null){ _bm=new Set((_dbBookmarks||[]).map(String));
+    try{ localStorage.setItem('rakkoma_bookmarks', JSON.stringify([..._bm])); }catch(e){} }
+  else { _bm=new Set(ls.map(String)); } }
 function isBm(id){ return _bm.has(String(id)); }
 function bmCount(){ const el=document.getElementById('bmcnt'); if(el) el.textContent=_bm.size?`(${_bm.size})`:''; }
 function bmToggle(id, ev){ ev.stopPropagation(); id=String(id);
