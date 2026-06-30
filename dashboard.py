@@ -125,6 +125,9 @@ HTML = r"""<!DOCTYPE html>
   .score { font-weight:700; }
   .s-hi { color:var(--good); } .s-mid { color:var(--mid); } .s-lo { color:var(--bad); }
   .genre { color:var(--mut); }
+  .gtag { display:inline-block; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+          vertical-align:middle; background:#16212e; border:1px solid #294056; color:#aecbe2;
+          border-radius:11px; padding:1px 10px; font-size:13.5px; }
   .detail td { background:#0d121b; padding:0; white-space:normal; }
   .detail .inner { padding:16px 20px 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;
                    font-size:14.5px; border-left:3px solid var(--accent); position:relative; }
@@ -314,7 +317,7 @@ const COLS = [
   {k:'stale',  label:'滞留',     get:r=>r.dwell_days ?? null, num:true},
   {k:'settled', label:'成約',    get:r=>r.settled_at ?? null, cls:'date', align:'right'},
   {k:'listed', label:'掲載',     get:r=>r.listed_at ?? null, cls:'date', align:'right'},
-  {k:'genre',  label:'ジャンル', get:r=>r.evaluation?.genre||'', cls:'genre'},
+  {k:'genre',  label:'ジャンル', get:r=>r.evaluation?.genre_main||'', cls:'genre'},
 ];
 let sortKey='cap', sortDir=-1;   // 既定: 適合(降順) → 総合(降順)
 const VRANK={'買い':0,'様子見':1,'見送り':2};
@@ -387,6 +390,7 @@ function cell(c,r){
     return k==='ended' ? `<span class="mut" title="${tip}">~${v}日</span>` : `<span title="${tip}">${v}日</span>`;
   }
   if(c.k==='deal') return v+'日';
+  if(c.k==='genre'){ if(!v) return ''; return `<span class="gtag" title="${esc(r.evaluation?.genre||'')}">${esc(v)}</span>`; }
   return esc(String(v));
 }
 function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
@@ -775,10 +779,11 @@ def main() -> None:
             r["candidates"] = cs
         ev = r.get("evaluation")
         if ev and ev.get("genre"):
-            # 括弧の補足を除去 → 短縮辞書 → 念のため20字で丸め
+            # 括弧の補足を除去 → 短縮辞書。フルは tooltip/検索用に保持し、主ジャンル1語(先頭トークン)を別途持つ
             g = re.sub(r"[（(][^）)]*[）)]", "", ev["genre"]).strip(" /　/")
             g = abbr_genre(g)
-            ev["genre"] = g if len(g) <= 20 else g[:19] + "…"
+            ev["genre"] = g
+            ev["genre_main"] = re.split(r"[／/・、,\s]+", g)[0] if g else ""
         # 運営乖離（収益化月数 ≫ 運営月数 = 再販/移管の疑い）をフラグに格上げ
         if (r.get("history_gap") or 0) >= 3 and "運営乖離" not in r.get("flags", []):
             r.setdefault("flags", []).append("運営乖離")
