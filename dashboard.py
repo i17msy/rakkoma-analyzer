@@ -661,8 +661,8 @@ function renderOverview(rows){
      +_ovRow('滞留 中央値',_med(dw)+'日',true)
      +_ovRow('即決 ≤7日',`<span class="ov-hi">${fast.length}件 (${_pct(fast.length,sr.length)}%)</span>`)
      +_ovRow('≤30日 / ≤90日',`${_pct(w30.length,sr.length)}% / ${_pct(w90.length,sr.length)}%`)
-     +_ovRow('価格 即決↔じっくり',`${yen(fp)} ↔ ${yen(sp)}`)
-     +_ovRow('利益 即決↔じっくり',`${yen(fpr)} ↔ ${yen(spr)}`)
+     +_ovRow('価格 即決↔じっくり',`${yen(fp)} <span class="k">(n${fast.length})</span> ↔ ${yen(sp)} <span class="k">(n${slow.length})</span>`)
+     +_ovRow('利益 即決↔じっくり',`${yen(fpr)} <span class="k">(n${fast.length})</span> ↔ ${yen(spr)} <span class="k">(n${slow.length})</span>`)
      +(toks.length?`<div class="ov-note">即決(≤7日)の頻出ジャンル: ${_tags(toks,6)}</div>`:'');
   }
   // 判定×成約
