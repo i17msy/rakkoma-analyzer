@@ -391,6 +391,24 @@ def _pulse(notified=None) -> None:
         log.warning(f"pulse失敗（監視/バックアップ・本体継続）: {e}")
 
 
+def _daily_match() -> None:
+    """1日1回、YouTube候補照合バッチを回す（＝ローカルルーティン本体・cloud routineの代替）。
+    前回の続きから優先順（募集中→成約済み→受付終了）で処理し、quota上限で安全中断。
+    idle側では main() のループに来ないので呼ばれない＝稼働中の observer だけが担当。"""
+    try:
+        marker = DATA_DIR / "last_match_date.txt"
+        today = datetime.now(JST).strftime("%Y-%m-%d")
+        if marker.exists() and marker.read_text().strip() == today:
+            return                                          # 今日は実行済み → no-op
+        marker.write_text(today)                            # 先にマーク（同日多重実行防止）
+        import match
+        log.info("=== 日次マッチ開始（YouTube候補照合バッチ）===")
+        match.batch()                                       # 冪等・quota上限で自動中断・末尾でダッシュ再生成
+        log.info("=== 日次マッチ完了 ===")
+    except Exception as e:
+        log.warning(f"日次マッチ失敗（本体継続）: {e}")
+
+
 # ── アイドル判定（重複ポーリング防止）─────────────────────────────────────────
 
 def _is_idle_host() -> bool:
@@ -456,6 +474,7 @@ def main() -> None:
         except Exception as e:
             log.error(f"予期しないエラー: {e}", exc_info=True)
         _pulse(notified=n)   # 生死信号＋日次バックアップ（毎ポーリング・新着0でも打つ）
+        _daily_match()       # 1日1回 YouTube候補照合バッチ（ローカルルーティン・前回続き・quota中断）
         elapsed = _time.time() - t_start
         wait = max(0.0, POLL_INTERVAL_SEC - elapsed)
         log.info(f"{int(wait)}秒待機...")
