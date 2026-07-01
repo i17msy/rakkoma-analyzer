@@ -229,6 +229,13 @@ Cloudflare R2（S3互換・**エグレス無料**）を専用バケット `rakko
 - State 3（R2 fetch失敗）→ 🔍 `[監視系異常] R2読み取りに失敗（observerとは無関係の可能性）`
 - ※ heartbeat に `stale_after_sec`(5400) を同梱しているので、routine 側でハードコードせずこの値を読んでもよい
 
+##### ⭐ cloud routine の実装制約（2026-07-01 実地判明・作り直す時の地雷）
+Docker停止で死活監視が発火するか実験して判明した2点。routineスクリプトを書く時は必ずこれに従う:
+- **Claude cloud 環境は `hooks.slack.com` への直POST がプロキシ403でブロックされる** → **Cloudflare Worker を中継**して回避。
+  Worker は Secret 環境変数 `SLACK_WEBHOOK_URL` に Slack webhook URL を保持し、routine は Worker のURLへPOSTする（webhookは routine スクリプトに直書きしない）。
+- **routine は `pip install` 不要の stdlib only で R2 にアクセス**（`boto3` 依存をやめ **SigV4 を自前実装**）。cloud環境での pip 失敗・遅延を避ける。
+- ※ 旧記述（boto3をpip installして hooks.slack.com へ直POST）は上記に更新済み。MLB側の同型ルーチンも同じ制約を受ける。
+
 ---
 
 ## ファイル構成
