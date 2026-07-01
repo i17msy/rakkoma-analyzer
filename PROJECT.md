@@ -215,7 +215,9 @@ Cloudflare R2（S3互換・**エグレス無料**）を専用バケット `rakko
 - heartbeat は **MLBの cloud routine 互換**（`last_poll`(epoch)/`last_poll_jst`/`host` を同梱）。
   独自の monitor を作らず、MLBと同じ3-state routine を**rakkoma用にクローン**して使う（下表）。
 
-#### cloud routine による死活監視（rakkoma・MLBパターンに準拠・✅稼働中）
+#### cloud routine による死活監視（rakkoma・✅2026-07-01 新実装デプロイ＋発信〜iPhone着信まで全経路 実地検証済）
+
+新実装＝stdlib自前SigV4でR2フェッチ／SlackはWorker中継＋browser UA／アラートは`<!channel>`でモバイルプッシュ。旧boto3+直POST版から差し替え済。ルーチン本文は base64手転記が壊れたためコピペで更新（`routine_content.txt`はsecrets含むためgitignore）。
 | 項目 | 値 |
 |---|---|
 | routine ID | `trig_01Bt5MzKGD1NRw5BbT4AzWyQ`（2026-06-29 作成・有効） |
