@@ -447,8 +447,9 @@ function ytSection(cands){
       let rev='';
       if(b.rev){ const rv=b.rev; const t=_revTier(rv.ratio);
         const sr=Math.round((rv.short_ratio||0)*100);
-        const smark=sr>=30?` <span class="mut" title="Shorts比率${sr}%（RPMは長尺¥120〜450/Shorts¥5〜50で分けて逆算済）">⚡Shorts${sr}%</span>`:'';
-        rev=`<div class="ytrev" title="再生をShorts/長尺に分け各RPM(長尺¥120〜450・Shorts¥5〜50/千再生)で逆算した概算レンジ。比=逆算中央÷申告。極端な比は筆頭候補の誤マッチを疑う">`
+        const band=rv.rpm_band?`長尺¥${rv.rpm_band[0]}〜${rv.rpm_band[1]}`:'長尺¥120〜450';
+        const smark=sr>=30?` <span class="mut" title="Shorts比率${sr}%（RPMは${band}/Shorts¥5〜50で分けて逆算済）">⚡Shorts${sr}%</span>`:'';
+        rev=`<div class="ytrev" title="再生をShorts/長尺に分け各RPM(${band}[ジャンル別]・Shorts¥5〜50/千再生)で逆算した概算レンジ。比=逆算中央÷申告。極端な比は筆頭候補の誤マッチを疑う">`
           +`💰 申告 ${yen(rv.claimed)}/月 vs 再生逆算 ${yen(rv.rev_low)}〜${yen(rv.rev_high)}/月 <b class="${t.c}">${t.e} ${rv.ratio}x （${t.t}）</b>${smark}</div>`; }
       else { rev=`<div class="ytrev ytrev-none" title="ラッコに月次の申告利益が開示されていないため逆算できません（収益条件達成と謳いつつ数字非開示＝注意）">💰 <b>申告利益の開示なし（逆算不可）</b></div>`; }
       bench=`<div class="ytera">📐 勝ち筋era <b>${b.win_start||'?'}〜${b.win_end||'?'}</b>（${b.win_count}本・崖${b.cliff||'-'}）</div>`

@@ -255,18 +255,35 @@ def _bias_signals(monthly: dict) -> dict:
             "span": f"{ms[0]}〜{ms[-1]}", "n_months": len(ms)}
 
 
-# 日本YouTubeの一般的なAdSense RPM(¥/1000再生)レンジ。長尺とShortsで桁違いなので分けて持つ。
-_RPM_LOW, _RPM_HIGH = 120, 450            # 長尺
-_SHORT_RPM_LOW, _SHORT_RPM_HIGH = 5, 50   # Shorts（広告プール分配が薄く長尺の1/5〜1/30）
+# 日本YouTube 長尺AdSense RPM(¥/1000再生)。ジャンルで桁違いなので帯を分ける。上から順にキーワード一致で採用。
+_GENRE_RPM = [
+    (("金融", "投資", "株式", "仮想通貨", "暗号資産", "不動産", "保険", "節税", "確定申告", "FX", "クレジットカード", "資産運用"), (450, 1100)),
+    (("ビジネス", "副業", "マーケティング", "転職", "キャリア", "就活", "法律", "士業", "BtoB", "SaaS"), (300, 700)),
+    (("ガジェット", "家電", "PC", "カメラ", "レビュー", "美容", "コスメ", "スキンケア", "健康", "医療", "ダイエット", "脱毛"), (250, 600)),
+    (("ゲーム", "エンタメ", "音楽", "アニメ", "漫画", "芸能", "スポーツ", "野球", "サッカー", "格闘", "海外反応", "海外の反応",
+      "切り抜き", "朗読", "キッズ", "子供", "ペット", "動物", "反応集", "実況"), (80, 280)),
+]
+_RPM_DEFAULT = (120, 450)                  # 雑学/まとめ/解説/政治/占い/都市伝説/歴史 等の一般
+_SHORT_RPM_LOW, _SHORT_RPM_HIGH = 5, 50    # Shorts（広告プール分配が薄く長尺の1/5〜1/30・ジャンル非依存で低い）
 
 
-def _revenue_check(vids: list, claimed: int | None) -> dict | None:
+def _genre_rpm(genre: str | None) -> tuple[int, int]:
+    """ジャンル文字列から長尺RPM帯を返す（キーワード部分一致・上から優先）。"""
+    g = genre or ""
+    for kws, band in _GENRE_RPM:
+        if any(k in g for k in kws):
+            return band
+    return _RPM_DEFAULT
+
+
+def _revenue_check(vids: list, claimed: int | None, genre: str | None = None) -> dict | None:
     """総再生÷運営月数で平均月間再生を出し、RPMレンジで月収を逆算→申告利益と比較（決定論・無料・概算レンジ）。
-    Shortsは長尺と桁違いに低RPMなので、再生をShorts/長尺に分けて各レンジで逆算し合算（混在chも正しく扱う）。
+    RPMは長尺=ジャンル別帯・Shorts=低帯に分け、再生をShorts/長尺に分けて各帯で逆算し合算（混在chも正しく扱う）。
     狙い: ラッコ最重要の申告収益が、実再生で物理的に妥当かのレンジ判定（点でなく幅）。"""
     if not vids or not claimed or claimed <= 0:
         return None
     from datetime import date
+    lo, hi = _genre_rpm(genre)                                       # 長尺RPM帯（ジャンル別）
     sv = sum(v.get("views", 0) for v in vids if v.get("short"))      # Shorts再生
     lv = sum(v.get("views", 0) for v in vids if not v.get("short"))  # 長尺再生
     total = sv + lv
@@ -275,13 +292,14 @@ def _revenue_check(vids: list, claimed: int | None) -> dict | None:
         months = max(1.0, (datetime.now(timezone.utc).date() - date(y, m, d)).days / 30.4)
     except Exception:
         months = max(1.0, len(vids) / 4)
-    low = int((sv * _SHORT_RPM_LOW + lv * _RPM_LOW) / 1000 / months)
-    high = int((sv * _SHORT_RPM_HIGH + lv * _RPM_HIGH) / 1000 / months)
+    low = int((sv * _SHORT_RPM_LOW + lv * lo) / 1000 / months)
+    high = int((sv * _SHORT_RPM_HIGH + lv * hi) / 1000 / months)
     ratio = round((low + high) / 2 / claimed, 2)
     flag = "ok" if 0.6 <= ratio <= 2.0 else ("under" if ratio < 0.6 else "over")
     return {"claimed": int(claimed), "monthly_views": int(total / months),
             "rev_low": low, "rev_high": high, "ratio": ratio, "flag": flag,
-            "short_ratio": round(sv / total, 2) if total else 0}
+            "short_ratio": round(sv / total, 2) if total else 0,
+            "rpm_band": [lo, hi]}
 
 
 def _bias_note(monthly: dict, win: list, cliff, sig: dict, rev: dict | None = None) -> str | None:
@@ -382,13 +400,15 @@ def run(ch: str, top: int = 3, listing_id: str | None = None, deep: bool = False
         try:
             import storage as _st
             _c = _st.init()
-            _r = _c.execute("SELECT profit_avg, profit_recent FROM listings WHERE id=?", (listing_id,)).fetchone()
+            _r = _c.execute("""SELECT l.profit_avg, l.profit_recent, e.genre
+                FROM listings l LEFT JOIN evaluations e ON e.listing_id=l.id WHERE l.id=?""", (listing_id,)).fetchone()
             claimed = (_r[0] if _r and _r[0] else (_r[1] if _r else None))
-            rev = _revenue_check(vids, claimed)
+            genre = _r[2] if _r else None
+            rev = _revenue_check(vids, claimed, genre)
             if rev:
                 f = {"under": "⚠️", "over": "🔼", "ok": "✅"}[rev["flag"]]
                 print(f"--- 収益逆算 {f} ---\n  申告 ¥{rev['claimed']:,}/月 vs 再生逆算 ¥{rev['rev_low']:,}〜¥{rev['rev_high']:,}/月 "
-                      f"（平均月間再生{rev['monthly_views']:,} / 比 {rev['ratio']}x）")
+                      f"（平均月間再生{rev['monthly_views']:,} / RPM帯¥{rev['rpm_band'][0]}〜{rev['rpm_band'][1]}[{genre or '一般'}] / 比 {rev['ratio']}x）")
         except Exception as e:
             print(f"[warn] 収益逆算スキップ: {e}", file=sys.stderr)
 
