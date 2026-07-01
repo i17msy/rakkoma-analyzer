@@ -236,6 +236,7 @@ Docker停止で死活監視が発火するか実験して判明した2点。rout
   **rakkoma用 Worker = `https://rakkoma-analyzer-heartbeat.masaya-ishii.workers.dev`（2026-07-01 作成・bodyをそのままSlackへ転送するパススルー）**。
   ⚠️ **Worker(workers.dev)へのPOSTは browser風 User-Agent 必須**：urllibデフォルトUA(`Python-urllib`)は Cloudflare のボット判定（error 1010/403）で弾かれ本番で沈黙する。`User-Agent: Mozilla/5.0 ...Chrome...` を付ける（実地検証済）。
 - **routine は `pip install` 不要の stdlib only で R2 にアクセス**（`boto3` 依存をやめ **SigV4 を自前実装**）。cloud環境での pip 失敗・遅延を避ける。
+- **Slackアラートには `<!channel>`（or @メンション）を必ず入れる**：Incoming Webhookの平文投稿はメンション無しだと iPhone にプッシュ/バッジが来ない（Slack既定はDM/メンション/キーワードのみプッシュ）。実地確認済（平文=無音／`<!channel>`=プッシュ来た）。
 - ※ 旧記述（boto3をpip installして hooks.slack.com へ直POST）は上記に更新済み。MLB側の同型ルーチンも同じ制約を受ける。
 
 ---
