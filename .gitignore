@@ -12,3 +12,5 @@ data/exports/
 bookmarks.json
 bookmarks_db.json
 *:Zone.Identifier
+routine_content.txt
+deathwatch*.py
