@@ -328,19 +328,26 @@ def run(lid: str, n: int = 5, benchmark: bool = False, regen: bool = True, deep:
 
 
 def batch(limit: int = 19, bench: bool = True) -> int:
-    """募集中×買い/様子見×適合≥4×YouTube種別 の未検索案件を一括候補検索（サムネ視覚スキャン用に母数を広げる）。
-    既定で筆頭候補の軽いベンチ（勝ち筋era＋偏り示唆・~1円/件）も付与（重い再解釈レポートは無し）。
-    quota上限で安全中断（再実行で続きから）。"""
+    """買い/様子見×適合≥4×YouTube種別 の未検索案件を優先順で一括候補検索（サムネ視覚スキャン用に母数を広げる）。
+    優先順＝①募集中(買える・最優先) → ②成約済み(市場検証済みの学習corpus) → ③受付終了。各tierを埋めてから次へ。
+    既定で筆頭候補の軽いベンチ（勝ち筋era＋偏り示唆＋収益逆算・~1円/件）も付与（重い再解釈レポートは無し）。
+    quota上限で安全中断（再実行/日次ルーチンで続きから＝この優先順に自動で進む）。"""
     conn = storage.init()
     searched = {r[0] for r in conn.execute("SELECT DISTINCT listing_id FROM channel_candidates")}
     rows = conn.execute("""
-        SELECT l.id FROM listings l JOIN evaluations e ON e.listing_id=l.id
-        WHERE l.status_state='募集中' AND e.verdict IN ('買い','様子見')
+        SELECT l.id, l.status_state FROM listings l JOIN evaluations e ON e.listing_id=l.id
+        WHERE l.status_state IN ('募集中','成約済み','受付終了') AND e.verdict IN ('買い','様子見')
           AND e.capability_fit>=4 AND l.asset_type LIKE '%YouTube%'
-        ORDER BY e.overall_score DESC""").fetchall()
+        ORDER BY CASE l.status_state WHEN '募集中' THEN 0 WHEN '成約済み' THEN 1 ELSE 2 END,
+                 e.overall_score DESC""").fetchall()
     targets = [str(r[0]) for r in rows if str(r[0]) not in searched][:limit]
-    print(f"=== 一括候補検索（買い/様子見×適合≥4×YouTube×未検索）対象 {len(targets)} 件 / 上限{limit}"
-          f"{' ＋筆頭ベンチ(偏り示唆)' if bench else ''} ===")
+    tiers = {}
+    for r in rows:
+        if str(r[0]) in targets:
+            tiers[r[1]] = tiers.get(r[1], 0) + 1
+    tier_s = " / ".join(f"{k}{v}" for k, v in tiers.items())
+    print(f"=== 一括候補検索（買い/様子見×適合≥4×YouTube×未検索・優先:募集中→成約済み→受付終了）"
+          f"対象 {len(targets)} 件（{tier_s}）/ 上限{limit}{' ＋筆頭ベンチ' if bench else ''} ===")
     done = 0
     for i, lid in enumerate(targets, 1):
         print(f"\n──────── [{i}/{len(targets)}] 案件 {lid} ────────")
