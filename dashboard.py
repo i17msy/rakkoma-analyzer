@@ -298,14 +298,14 @@ HTML = r"""<!DOCTYPE html>
     <option value="収益不明">❓ 収益不明(系列✖)</option>
     <option value="実績安定">✅ 実績安定</option>
   </select>
-  <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
   <select id="bmf" onchange="render()">
     <option value="">☆: すべて</option>
     <option value="only">★のみ</option>
-    <option value="not">☆以外</option>
+    <option value="not">★以外</option>
   </select>
   <span id="bmcnt" class="mut"></span>
   <button id="bmExportBtn" onclick="bmExport()" title="★をbookmarks.jsonに書き出し">⬇</button>
+  <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
   <button id="toggleAll" onclick="toggleAllRows()">▼ 全展開</button>
   <button id="ovBtn" onclick="toggleOverview()">📊 総合</button>
   <span class="sp"></span>
