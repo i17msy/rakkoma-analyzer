@@ -299,7 +299,12 @@ HTML = r"""<!DOCTYPE html>
     <option value="実績安定">✅ 実績安定</option>
   </select>
   <label class="mut"><input type="checkbox" id="evalOnly" onchange="render()"> 評価済みのみ</label>
-  <label class="mut"><input type="checkbox" id="bmOnly" onchange="render()"> ★のみ <span id="bmcnt" class="mut"></span></label>
+  <select id="bmf" onchange="render()">
+    <option value="">☆: すべて</option>
+    <option value="only">★のみ</option>
+    <option value="not">☆以外</option>
+  </select>
+  <span id="bmcnt" class="mut"></span>
   <button id="bmExportBtn" onclick="bmExport()" title="★をbookmarks.jsonに書き出し">⬇</button>
   <button id="toggleAll" onclick="toggleAllRows()">▼ 全展開</button>
   <button id="ovBtn" onclick="toggleOverview()">📊 総合</button>
@@ -537,13 +542,14 @@ function render(){
   const atf=document.getElementById('atf').value;
   const pf=document.getElementById('pf').value;
   const evalOnly=document.getElementById('evalOnly').checked;
-  const bmOnly=document.getElementById('bmOnly').checked;
+  const bmf=document.getElementById('bmf').value;
   // asset_type が一件も埋まっていない間(バックフィル中)は種別フィルタを無効化して空表示を防ぐ
   const hasAT=DATA.some(r=>r.asset_type);
 
   let rows=DATA.filter(r=>{
     if(evalOnly && !r.evaluation) return false;
-    if(bmOnly && !isBm(r.id)) return false;
+    if(bmf==='only' && !isBm(r.id)) return false;
+    if(bmf==='not' && isBm(r.id)) return false;
     if(atf==='__yt' && hasAT && !(r.asset_type||'').includes('YouTube')) return false;
     if(atf==='__nonyt' && (r.asset_type||'').includes('YouTube')) return false;
     if(pf){ const ps=pf.split('-'); const lo=+ps[0], hi=ps[1]===''?null:+ps[1];
@@ -813,7 +819,7 @@ function bmToggle(id, ev){ ev.stopPropagation(); id=String(id);
   if(_bm.has(id)) _bm.delete(id); else _bm.add(id);
   try{ localStorage.setItem('rakkoma_bookmarks', JSON.stringify([..._bm])); }catch(e){}
   bmCount();
-  if(document.getElementById('bmOnly').checked){ render(); }   // ★のみ表示中は外したら消す
+  if(document.getElementById('bmf').value){ render(); }   // ★のみ/☆以外 表示中は切替で行の出入りがあるので再描画
   else { const el=ev.currentTarget, on=_bm.has(id); el.textContent=on?'★':'☆'; el.classList.toggle('on',on); }
 }
 function bmExport(){
