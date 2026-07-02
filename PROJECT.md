@@ -215,28 +215,26 @@ Cloudflare R2（S3互換・**エグレス無料**）を専用バケット `rakko
 - heartbeat は **MLBの cloud routine 互換**（`last_poll`(epoch)/`last_poll_jst`/`host` を同梱）。
   独自の monitor を作らず、MLBと同じ3-state routine を**rakkoma用にクローン**して使う（下表）。
 
-#### cloud routine による死活監視（rakkoma・✅2026-07-01 新実装デプロイ＋発信〜iPhone着信まで全経路 実地検証済）
-
-新実装＝stdlib自前SigV4でR2フェッチ／SlackはWorker中継＋browser UA／アラートは`<!channel>`でモバイルプッシュ。旧boto3+直POST版から差し替え済。ルーチン本文は base64手転記が壊れたためコピペで更新（`routine_content.txt`はsecrets含むためgitignore）。
+#### 死活監視 = Cloudflare Worker（Cron Trigger + R2バインディング）＝✅2026-07-02 確定形
+**claude.ai の cloud routine では通知を送れないと判明したため、死活監視を丸ごと Cloudflare Worker に載せた。**
 | 項目 | 値 |
 |---|---|
-| routine ID | `trig_01Bt5MzKGD1NRw5BbT4AzWyQ`（2026-06-29 作成・有効） |
-| 監視対象 | R2 `rakkoma-analyzer` / `heartbeat/observer.json` |
-| スケジュール | `45 5,23 * * *` UTC = JST 08:45 / 14:45（MLBと同じ・毎日） |
-| **しきい値** | **5400秒（90分）= ポーリング30分 × 3欠落**（MLBの1800とは別値） |
-| 通知先 | rakkoma の Slack チャンネル（厳選通知と同じ webhook） |
-| 監視ロジック | 3-state（正常:silent / 停止疑い:⚠️ / 監視系異常:🔍） |
+| 実体 | Worker `rakkoma-analyzer-heartbeat`（`scheduled()`＝死活監視本体 ＋ `fetch()`＝旧Slack中継を残置） |
+| スケジュール | Worker Cron Trigger `45 5,23 * * *` UTC = JST 08:45 / 14:45 |
+| R2読取 | **R2バインディング** `RAKKOMA_BUCKET`→`rakkoma-analyzer`（ネイティブ・SigV4不要） |
+| Slack通知 | Worker から直接 `env.SLACK_WEBHOOK_URL`（Cloudflare→Slackは到達可）。`<!channel>`でモバイルプッシュ |
+| しきい値 | 5400秒（90分）= ポーリング30分 × 3欠落 |
+| ロジック | 3-state（正常:silent / 停止疑い:⚠️ / 監視系異常:🔍 [R2なし/読取失敗]） |
 
-- State 2（`now - last_poll > 5400` かつ fetch成功）→ ⚠️ `[要確認] rakkoma observer が停止している可能性`
-- State 3（R2 fetch失敗）→ 🔍 `[監視系異常] R2読み取りに失敗（observerとは無関係の可能性）`
-- ※ heartbeat に `stale_after_sec`(5400) を同梱しているので、routine 側でハードコードせずこの値を読んでもよい
+Worker コード＝`cloudflare_worker_deathwatch.js`（gitignore）。claude.ai 旧routine `trig_01Bt5MzKGD1NRw5BbT4AzWyQ` は無効化。
 
-##### ⭐ cloud routine の実装制約（2026-07-01 実地判明・作り直す時の地雷）
-Docker停止で死活監視が発火するか実験して判明した2点。routineスクリプトを書く時は必ずこれに従う:
-- **Claude cloud 環境は `hooks.slack.com` への直POST がプロキシ403でブロックされる** → **Cloudflare Worker を中継**して回避。
-  Worker は Secret 環境変数 `SLACK_WEBHOOK_URL` に Slack webhook URL を保持し、routine は Worker のURLへPOSTする（webhookは routine スクリプトに直書きしない）。
-  **rakkoma用 Worker = `https://rakkoma-analyzer-heartbeat.masaya-ishii.workers.dev`（2026-07-01 作成・bodyをそのままSlackへ転送するパススルー）**。
-  ⚠️ **Worker(workers.dev)へのPOSTは browser風 User-Agent 必須**：urllibデフォルトUA(`Python-urllib`)は Cloudflare のボット判定（error 1010/403）で弾かれ本番で沈黙する。`User-Agent: Mozilla/5.0 ...Chrome...` を付ける（実地検証済）。
+##### ⭐ なぜ Worker に載せたか（cloud routine の egress 制約・2026-07-02 確定）
+Docker(PC)停止で発火するか実地検証して判明。**claude.ai の cloud routine 環境は egress が厳しい**:
+- R2(`r2.cloudflarestorage.com`)は**届く**（自前SigV4のstdlib実装でフェッチ成功）
+- だが **`hooks.slack.com` も `workers.dev` も 403 で弾かれる** → cloud routineは「R2読んで停止検知（10時間停止を実検知）」までできても**通知段(Worker POST)が403で必ず失敗＝沈黙**
+- ∴ **Slack到達が必要な死活監視は claude.ai routine に載せてはいけない**。Cloudflare Worker(Cron+R2 binding)なら R2 も Slack も両方届く＝正しい置き場
+- 教訓の一般化: **cloud routineは外部到達が要る処理に不向き**（matchはローカルDB不足でno-op、死活監視はSlack不達）。→ **ローカル(observerデーモン)かCloudflare(Worker)へ**、が本セッションの結論
+- 付随して判明した小地雷（Worker POST時）: `<!channel>`が無いとSlackはモバイルにプッシュしない／urllibでWorkerを叩くならbrowser UA必須(CF error 1010回避)
 - **routine は `pip install` 不要の stdlib only で R2 にアクセス**（`boto3` 依存をやめ **SigV4 を自前実装**）。cloud環境での pip 失敗・遅延を避ける。
 - **Slackアラートには `<!channel>`（or @メンション）を必ず入れる**：Incoming Webhookの平文投稿はメンション無しだと iPhone にプッシュ/バッジが来ない（Slack既定はDM/メンション/キーワードのみプッシュ）。実地確認済（平文=無音／`<!channel>`=プッシュ来た）。
 - ※ 旧記述（boto3をpip installして hooks.slack.com へ直POST）は上記に更新済み。MLB側の同型ルーチンも同じ制約を受ける。

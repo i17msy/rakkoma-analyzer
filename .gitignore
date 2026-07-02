@@ -15,3 +15,4 @@ bookmarks_db.json
 routine_content.txt
 deathwatch*.py
 last_match_date.txt
+cloudflare_worker_deathwatch.js
