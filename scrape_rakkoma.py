@@ -394,17 +394,33 @@ def _pulse(notified=None) -> None:
 def _daily_match() -> None:
     """1日1回、YouTube候補照合バッチを回す（＝ローカルルーティン本体・cloud routineの代替）。
     前回の続きから優先順（募集中→成約済み→受付終了）で処理し、quota上限で安全中断。
-    idle側では main() のループに来ないので呼ばれない＝稼働中の observer だけが担当。"""
+    idle側では main() のループに来ないので呼ばれない＝稼働中の observer だけが担当。
+    ※quota枯渇で0件だった日は「実施済み」にせず、quota回復(≈16時JST)後の次ポーリングで再試行する
+      （マーカーは"進捗があった/対象が尽きた"時だけ書く。早朝にquota枯渇で空振り→終日休眠する不具合を回避）。"""
     try:
+        import match, storage
+        conn = storage.init()
         marker = DATA_DIR / "last_match_date.txt"
         today = datetime.now(JST).strftime("%Y-%m-%d")
         if marker.exists() and marker.read_text().strip() == today:
-            return                                          # 今日は実行済み → no-op
-        marker.write_text(today)                            # 先にマーク（同日多重実行防止）
-        import match
-        log.info("=== 日次マッチ開始（YouTube候補照合バッチ）===")
+            return                                          # 今日は実施済み → no-op
+        # 未照合ターゲットが尽きていれば実施済みマークして終わり（毎ポーリングでの無駄叩き防止）
+        remain = conn.execute("""SELECT COUNT(*) FROM listings l JOIN evaluations e ON e.listing_id=l.id
+            WHERE l.status_state IN ('募集中','成約済み','受付終了') AND e.verdict IN ('買い','様子見')
+              AND e.capability_fit>=4 AND l.asset_type LIKE '%YouTube%'
+              AND l.id NOT IN (SELECT listing_id FROM channel_candidates)""").fetchone()[0]
+        if remain == 0:
+            marker.write_text(today)
+            return
+        before = conn.execute("SELECT COUNT(DISTINCT listing_id) FROM channel_candidates").fetchone()[0]
+        log.info(f"=== 日次マッチ開始（未照合{remain}件）===")
         match.batch()                                       # 冪等・quota上限で自動中断・末尾でダッシュ再生成
-        log.info("=== 日次マッチ完了 ===")
+        after = conn.execute("SELECT COUNT(DISTINCT listing_id) FROM channel_candidates").fetchone()[0]
+        if after > before:                                  # 進捗があった日だけ実施済みに（quota枯渇の空振りは翌ポーリングで再試行）
+            marker.write_text(today)
+            log.info(f"=== 日次マッチ完了（+{after - before}件）===")
+        else:
+            log.info("日次マッチ: 進捗0（quota枯渇の可能性）→ マーカー書かず次ポーリングで再試行")
     except Exception as e:
         log.warning(f"日次マッチ失敗（本体継続）: {e}")
 
